@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand" aria-label="Agenda">
+      <span class="brand-mark" aria-hidden="true">&#128197;</span>
+      <span id="consultant-name">Agenda</span>
+    </div>
+    <p class="today-label" id="today-label"></p>
+  </header>
+
+  <main class="dashboard">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">Afspraken in één oogopslag</p>
+      <h1 id="page-title">Cliëntenagenda</h1>
+      <p class="intro-copy">Plan en beheer je afspraken op werkdagen.</p>
+    </section>
+
+    <section class="summary" aria-label="Afsprakenoverzicht">
+      <article class="summary-item summary-week">
+        <span class="summary-label">Afspraken in deze week</span>
+        <p class="summary-value"><span id="weekly-count">0</span><span class="summary-unit">afspraken</span></p>
+      </article>
+      <article class="summary-item summary-all">
+        <span class="summary-label">Vandaag</span>
+        <p class="summary-value"><span id="today-count">0</span><span class="summary-unit">afspraken</span></p>
+      </article>
+      <article class="summary-item summary-count">
+        <span class="summary-label">Totaal gepland</span>
+        <p class="summary-value"><span id="appointment-count">0</span><span class="summary-unit">afspraken</span></p>
+      </article>
+    </section>
+
+    <div class="workspace">
+      <section class="panel form-panel" aria-labelledby="form-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="form-mode-label">Nieuwe afspraak</p>
+            <h2 id="form-title">Afspraak plannen</h2>
+          </div>
+          <span class="today-tag">Ma t/m vr</span>
+        </div>
+
+        <form id="appointment-form">
+          <label class="field" for="appointment-date">
+            <span>Datum</span>
+            <input id="appointment-date" name="date" type="date" required>
+          </label>
+
+          <label class="field" for="appointment-client">
+            <span>Cliënt</span>
+            <select id="appointment-client" name="client" required disabled>
+              <option value="" selected disabled>Cliënten laden...</option>
+            </select>
+          </label>
+
+          <div class="time-fields">
+            <div class="field start-time-field">
+              <span>Begint om</span>
+              <div class="start-time-pickers">
+                <label for="appointment-hour">
+                  <span>Uur</span>
+                  <select id="appointment-hour" name="startHour" required></select>
+                </label>
+                <label for="appointment-minute">
+                  <span>Minuten</span>
+                  <select id="appointment-minute" name="startMinute" required></select>
+                </label>
+              </div>
+            </div>
+            <label class="field" for="appointment-duration">
+              <span>Duur</span>
+              <div class="input-suffix">
+                <input id="appointment-duration" name="duration" type="number" min="15" max="720" step="5" value="30" required>
+                <span>min</span>
+              </div>
+            </label>
+          </div>
+
+          <label class="field" for="appointment-notes">
+            <span>Notitie <span class="optional">optioneel</span></span>
+            <textarea id="appointment-notes" name="notes" rows="3" maxlength="200" placeholder="Onderwerp of extra informatie"></textarea>
+          </label>
+
+          <button class="primary-button" id="form-submit-button" type="submit">
+            <span aria-hidden="true">+</span>
+            Afspraak opslaan
+          </button>
+          <button class="secondary-button" id="cancel-edit-button" type="button" hidden>Wijzigen annuleren</button>
+        </form>
+      </section>
+
+      <section class="panel calendar-panel" aria-labelledby="calendar-title">
+        <div class="calendar-heading">
+          <div>
+            <p class="eyebrow">Werkweek</p>
+            <h2 id="calendar-title">Agenda</h2>
+          </div>
+          <div class="week-controls" aria-label="Weeknavigatie">
+            <button class="week-button" id="previous-week" type="button" aria-label="Vorige week" title="Vorige week">&#8249;</button>
+            <button class="week-today" id="current-week" type="button">Vandaag</button>
+            <button class="week-button" id="next-week" type="button" aria-label="Volgende week" title="Volgende week">&#8250;</button>
+          </div>
+        </div>
+
+        <div class="week-label" id="week-label" aria-live="polite"></div>
+        <div class="calendar-scroll">
+          <div class="calendar-grid" id="calendar-grid" aria-label="Werkdagen maandag tot en met vrijdag"></div>
+        </div>
+      </section>
+    </div>
+
+    <p class="storage-note" id="storage-status" role="status">Verbinden met de database...</p>
+  </main>
+</body>
+</html>
