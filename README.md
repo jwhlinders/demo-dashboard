@@ -1,4 +1,5 @@
-# Cliëntenagenda
+# demo-dashboard
+Applicatie voor het bijhouden van agendaitems.
 
 ## Starten met PostgreSQL
 
