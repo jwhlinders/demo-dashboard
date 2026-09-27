@@ -690,6 +690,27 @@ td.hours-cell {
   margin-bottom: 6px;
 }
 
+.calendar-filter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 23px 0;
+}
+
+.agenda-filter {
+  width: min(100%, 330px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agenda-filter select {
+  min-height: 36px;
+}
+
 .week-controls {
   display: flex;
   align-items: center;
@@ -896,6 +917,11 @@ td.hours-cell {
     padding: 0 19px;
   }
 
+  .calendar-filter {
+    padding-right: 19px;
+    padding-left: 19px;
+  }
+
   .week-label {
     padding-right: 19px;
     padding-left: 19px;
@@ -973,6 +999,15 @@ td.hours-cell {
   .calendar-heading {
     align-items: flex-end;
     padding: 0 21px;
+  }
+
+  .calendar-filter {
+    padding-right: 21px;
+    padding-left: 21px;
+  }
+
+  .agenda-filter {
+    width: 100%;
   }
 
   .week-label {

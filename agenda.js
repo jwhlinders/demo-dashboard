@@ -4,6 +4,7 @@ const dateFormat = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "sh
 const weekdayFormat = new Intl.DateTimeFormat("nl-NL", { weekday: "long" });
 const monthFormat = new Intl.DateTimeFormat("nl-NL", { month: "long", year: "numeric" });
 const calendarGrid = document.querySelector("#calendar-grid");
+const clientFilter = document.querySelector("#agenda-client-filter");
 const statusMessage = document.querySelector("#storage-status");
 export let appointments = [];
 export let selectedWeek = getWeekStart();
@@ -55,22 +56,42 @@ export function setStorageStatus(message, isError = false) {
   statusMessage.classList.toggle("is-error", isError);
 }
 
+function updateClientFilter() {
+  const selectedClient = clientFilter.value;
+  const clients = [...new Set(appointments.map((appointment) => appointment.client))]
+    .sort((first, second) => first.localeCompare(second, "nl"));
+  clientFilter.replaceChildren(new Option("Alle cliënten", ""));
+  for (const client of clients) clientFilter.add(new Option(client, client));
+  clientFilter.value = clients.includes(selectedClient) ? selectedClient : "";
+  clientFilter.disabled = clients.length === 0;
+}
+
+function getVisibleAppointments() {
+  const selectedClient = clientFilter.value;
+  return selectedClient
+    ? appointments.filter((appointment) => appointment.client === selectedClient)
+    : appointments;
+}
+
 function updateSummary() {
+  const visibleAppointments = getVisibleAppointments();
   const weekEnd = new Date(selectedWeek);
   weekEnd.setDate(weekEnd.getDate() + 5);
   const weekStartString = localDateString(selectedWeek);
   const weekEndString = localDateString(weekEnd);
-  const weekAppointments = appointments.filter((appointment) => appointment.date >= weekStartString && appointment.date < weekEndString);
+  const weekAppointments = visibleAppointments.filter((appointment) => appointment.date >= weekStartString && appointment.date < weekEndString);
   const today = localDateString();
-  const todayAppointments = appointments.filter((appointment) => appointment.date === today);
-  const upcomingAppointments = appointments.filter((appointment) => appointment.date >= today);
+  const todayAppointments = visibleAppointments.filter((appointment) => appointment.date === today);
+  const upcomingAppointments = visibleAppointments.filter((appointment) => appointment.date >= today);
   document.querySelector("#weekly-count").textContent = String(weekAppointments.length);
   document.querySelector("#today-count").textContent = String(todayAppointments.length);
   document.querySelector("#appointment-count").textContent = String(upcomingAppointments.length);
 }
 
 export function renderCalendar() {
+  updateClientFilter();
   calendarGrid.replaceChildren();
+  const visibleAppointments = getVisibleAppointments();
   const weekEnd = new Date(selectedWeek);
   weekEnd.setDate(weekEnd.getDate() + 4);
   document.querySelector("#week-label").textContent = selectedWeek.getMonth() === weekEnd.getMonth()
@@ -81,7 +102,7 @@ export function renderCalendar() {
     const day = new Date(selectedWeek);
     day.setDate(day.getDate() + dayOffset);
     const dateString = localDateString(day);
-    const dayAppointments = appointments.filter((appointment) => appointment.date === dateString).sort((first, second) => first.start.localeCompare(second.start));
+    const dayAppointments = visibleAppointments.filter((appointment) => appointment.date === dateString).sort((first, second) => first.start.localeCompare(second.start));
     const dayColumn = document.createElement("section");
     dayColumn.className = "calendar-day";
     dayColumn.setAttribute("aria-label", `${weekdayFormat.format(day)} ${dateFormat.format(day)}`);
@@ -195,4 +216,5 @@ document.querySelector("#logout-button").addEventListener("click", async (event)
 document.querySelector("#previous-week").addEventListener("click", () => { selectedWeek.setDate(selectedWeek.getDate() - 7); renderCalendar(); });
 document.querySelector("#next-week").addEventListener("click", () => { selectedWeek.setDate(selectedWeek.getDate() + 7); renderCalendar(); });
 document.querySelector("#current-week").addEventListener("click", () => { selectedWeek = getWeekStart(); renderCalendar(); });
+clientFilter.addEventListener("change", renderCalendar);
 loadAppointments(startEditingAppointment);
