@@ -8,6 +8,7 @@ const clientFilter = document.querySelector("#agenda-client-filter");
 const statusMessage = document.querySelector("#storage-status");
 export let appointments = [];
 export let selectedWeek = getWeekStart();
+let isClientSession = false;
 
 export function setSelectedWeek(date) {
   selectedWeek = date;
@@ -139,21 +140,23 @@ export function renderCalendar() {
         notes.textContent = appointment.notes;
         card.append(notes);
       }
-      const actionRow = document.createElement("div");
-      actionRow.className = "appointment-actions";
-      const editButton = document.createElement("button");
-      editButton.className = "edit-button";
-      editButton.type = "button";
-      editButton.dataset.editId = appointment.id;
-      editButton.textContent = "Wijzigen";
-      const deleteButton = document.createElement("button");
-      deleteButton.className = "delete-button";
-      deleteButton.type = "button";
-      deleteButton.dataset.deleteId = appointment.id;
-      deleteButton.setAttribute("aria-label", `Verwijder afspraak met ${appointment.client}`);
-      deleteButton.textContent = "Verwijder";
-      actionRow.append(editButton, deleteButton);
-      card.append(actionRow);
+      if (!isClientSession) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "appointment-actions";
+        const editButton = document.createElement("button");
+        editButton.className = "edit-button";
+        editButton.type = "button";
+        editButton.dataset.editId = appointment.id;
+        editButton.textContent = "Wijzigen";
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "delete-button";
+        deleteButton.type = "button";
+        deleteButton.dataset.deleteId = appointment.id;
+        deleteButton.setAttribute("aria-label", `Verwijder afspraak met ${appointment.client}`);
+        deleteButton.textContent = "Verwijder";
+        actionRow.append(editButton, deleteButton);
+        card.append(actionRow);
+      }
       dayColumn.append(card);
     }
     calendarGrid.append(dayColumn);
@@ -167,7 +170,14 @@ async function loadAppointments(startEditingAppointment) {
     if (!appointmentsResponse.ok || !clientsResponse.ok || !consultantResponse.ok) throw new Error("Laden mislukt");
     const [loadedAppointments, clients, consultant] = await Promise.all([appointmentsResponse.json(), clientsResponse.json(), consultantResponse.json()]);
     appointments = loadedAppointments;
+    isClientSession = consultant.role === "client";
     document.querySelector("#consultant-name").textContent = consultant.name;
+    if (isClientSession) {
+      document.querySelector(".workspace").classList.add("client-workspace");
+      document.querySelector(".intro-copy").textContent = "Bekijk je afspraken.";
+      document.querySelector(".form-panel").hidden = true;
+      document.querySelector(".calendar-filter").hidden = true;
+    }
     loadClients(clients);
     setStorageStatus(clients.length ? "Je afspraken worden opgeslagen in PostgreSQL." : "Geen cliënten gevonden in de tabel klanten.", clients.length === 0);
   } catch {

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Registreren | Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-page">
+  <main class="login-shell register-shell">
+    <section class="login-panel" aria-labelledby="register-title">
+      <a class="brand login-brand" href="/login" aria-label="Cliëntenagenda">
+        <span class="brand-mark" aria-hidden="true">&#128197;</span>
+        <span>Cliëntenagenda</span>
+      </a>
+      <p class="eyebrow">Nieuw account</p>
+      <h1 id="register-title">Cliënt registreren</h1>
+      <p class="login-copy">Vul je gegevens in om een account aan te maken.</p>
+      <form id="register-form">
+        <div class="register-fields">
+          <label class="field" for="first-name">
+            <span>Voornaam</span>
+            <input id="first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" required autofocus>
+          </label>
+          <label class="field" for="last-name">
+            <span>Achternaam</span>
+            <input id="last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" required>
+          </label>
+          <label class="field" for="prefix">
+            <span>Tussenvoegsel <span class="optional">optioneel</span></span>
+            <input id="prefix" name="tussenvoegsel" type="text" maxlength="80" autocomplete="additional-name">
+          </label>
+          <label class="field" for="email">
+            <span>E-mailadres</span>
+            <input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
+          </label>
+          <label class="field" for="username">
+            <span>Gebruikersnaam</span>
+            <input id="username" name="username" type="text" minlength="3" maxlength="80" pattern="[A-Za-z0-9._-]+" autocomplete="username" required>
+          </label>
+          <label class="field" for="password">
+            <span>Wachtwoord</span>
+            <input id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+          </label>
+        </div>
+        <p class="login-error" id="register-error" role="alert" hidden></p>
+        <p class="register-success" id="register-success" role="status" hidden></p>
+        <button class="primary-button" type="submit">Account aanmaken</button>
+      </form>
+      <p class="login-copy register-prompt">Heb je al een account? <a href="/login">Terug naar inloggen</a>.</p>
+    </section>
+  </main>
+  <script>
+    document.querySelector("#register-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const error = document.querySelector("#register-error");
+      const success = document.querySelector("#register-success");
+      error.hidden = true;
+      success.hidden = true;
+      try {
+        const response = await fetch("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(form))),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Registreren is mislukt.");
+        form.reset();
+        success.textContent = "Je account is aangemaakt.";
+        success.hidden = false;
+      } catch (submitError) {
+        error.textContent = submitError.message || "Registreren is mislukt. Controleer je verbinding.";
+        error.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>

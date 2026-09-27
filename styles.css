@@ -38,6 +38,10 @@ body {
   width: min(100%, 420px);
 }
 
+.register-shell {
+  width: min(100%, 560px);
+}
+
 .login-panel {
   padding: 34px;
   border: 1px solid var(--line);
@@ -59,6 +63,33 @@ body {
   margin-bottom: 28px;
   color: var(--muted);
   font-size: 14px;
+}
+
+.register-prompt {
+  margin: 20px 0 0;
+  text-align: center;
+}
+
+.register-prompt a {
+  color: var(--green-dark);
+  font-weight: 700;
+}
+
+#register-form {
+  display: grid;
+  gap: 16px;
+}
+
+.register-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.register-success {
+  margin: 0;
+  color: var(--green-dark);
+  font-size: 13px;
 }
 
 .login-error {
@@ -638,6 +669,10 @@ td.hours-cell {
   grid-template-columns: minmax(270px, 0.78fr) minmax(0, 1.65fr);
 }
 
+.workspace.client-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 #appointment-form {
   display: grid;
   gap: 16px;
@@ -694,6 +729,10 @@ td.hours-cell {
   display: flex;
   justify-content: flex-end;
   padding: 12px 23px 0;
+}
+
+.calendar-filter[hidden] {
+  display: none;
 }
 
 .agenda-filter {
@@ -940,6 +979,10 @@ td.hours-cell {
 }
 
 @media (max-width: 680px) {
+  .register-fields {
+    grid-template-columns: 1fr;
+  }
+
   .site-header {
     height: 64px;
     padding: 0 20px;
