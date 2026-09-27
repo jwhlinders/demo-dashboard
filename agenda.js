@@ -180,6 +180,18 @@ async function loadAppointments(startEditingAppointment) {
 
 const { startEditingAppointment } = initForm();
 document.querySelector("#today-label").textContent = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+document.querySelector("#logout-button").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/logout", { method: "POST" });
+    if (!response.ok) throw new Error("Uitloggen is mislukt.");
+    window.location.href = "/login";
+  } catch {
+    button.disabled = false;
+    setStorageStatus("Uitloggen is mislukt. Probeer het opnieuw.", true);
+  }
+});
 document.querySelector("#previous-week").addEventListener("click", () => { selectedWeek.setDate(selectedWeek.getDate() - 7); renderCalendar(); });
 document.querySelector("#next-week").addEventListener("click", () => { selectedWeek.setDate(selectedWeek.getDate() + 7); renderCalendar(); });
 document.querySelector("#current-week").addEventListener("click", () => { selectedWeek = getWeekStart(); renderCalendar(); });

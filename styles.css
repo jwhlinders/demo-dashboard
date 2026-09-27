@@ -104,6 +104,45 @@ body {
   font-size: 13px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logout-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+.logout-button:focus-visible {
+  outline: 3px solid rgba(206, 112, 87, 0.65);
+  outline-offset: 3px;
+}
+
+.logout-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.logout-button svg {
+  width: 19px;
+  height: 19px;
+}
+
 .dashboard {
   width: min(1120px, calc(100% - 48px));
   margin: 0 auto;

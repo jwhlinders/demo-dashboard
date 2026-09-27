@@ -61,8 +61,9 @@ app.get("/api/consultant", async (request, response, next) => {
              TRIM(COALESCE(tussenvoegsel, '')) AS prefix,
              TRIM(achternaam) AS last_name
       FROM consultant
+      WHERE username = $1
       LIMIT 1
-    `);
+    `, [getSession(request).username]);
     if (result.rowCount === 0) return response.json({ name: "Agenda" });
 
     const consultant = result.rows[0];
