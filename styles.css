@@ -26,6 +26,47 @@ body {
   background: var(--canvas);
 }
 
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top right, #e8f1eb 0, var(--canvas) 42%, #fff8e8 100%);
+}
+
+.login-shell {
+  width: min(100%, 420px);
+}
+
+.login-panel {
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  box-shadow: 0 18px 50px rgba(32, 42, 38, 0.08);
+  animation: arrive 420ms ease-out both;
+}
+
+.login-brand {
+  margin-bottom: 52px;
+}
+
+.login-panel h1 {
+  margin-bottom: 8px;
+}
+
+.login-copy {
+  margin-bottom: 28px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login-error {
+  margin: 0 0 14px;
+  color: #a74432;
+  font-size: 13px;
+}
+
 .site-header {
   height: 74px;
   padding: 0 max(24px, calc((100vw - 1120px) / 2));

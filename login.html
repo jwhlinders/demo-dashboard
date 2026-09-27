@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Inloggen | Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-panel" aria-labelledby="login-title">
+      <div class="brand login-brand" aria-label="Agenda">
+        <span class="brand-mark" aria-hidden="true">&#128197;</span>
+        <span>Cliëntenagenda</span>
+      </div>
+      <p class="eyebrow">Beveiligde omgeving</p>
+      <h1 id="login-title">Welkom terug</h1>
+      <p class="login-copy">Log in om je agenda te bekijken.</p>
+      <form id="login-form">
+        <label class="field" for="username">
+          <span>Gebruikersnaam</span>
+          <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+        </label>
+        <label class="field" for="password">
+          <span>Wachtwoord</span>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="login-error" id="login-error" role="alert" hidden></p>
+        <button class="primary-button" type="submit">Inloggen</button>
+      </form>
+    </section>
+  </main>
+  <script>
+    document.querySelector("#login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const error = document.querySelector("#login-error");
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(new FormData(form))),
+      });
+      if (!response.ok) {
+        error.textContent = "Ongeldige gebruikersnaam of wachtwoord.";
+        error.hidden = false;
+        return;
+      }
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>

@@ -6,8 +6,53 @@ const { Pool } = require("pg");
 const app = express();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const port = Number(process.env.PORT || 3000);
+const sessions = new Map();
+const sessionCookie = "agenda_session";
 
 app.use(express.json({ limit: "16kb" }));
+app.use(express.urlencoded({ extended: false }));
+
+function getSession(request) {
+  const token = request.headers.cookie?.match(new RegExp(`${sessionCookie}=([^;]+)`))?.[1];
+  return token ? sessions.get(token) : null;
+}
+
+function requireLogin(request, response, next) {
+  if (request.path === "/styles.css") return next();
+  if (getSession(request)) return next();
+  if (request.path.startsWith("/api/")) return response.status(401).json({ error: "Log eerst in." });
+  response.redirect("/login");
+}
+
+app.get("/login", (request, response) => response.sendFile(path.join(__dirname, "login.html")));
+
+app.post("/api/login", async (request, response, next) => {
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const password = typeof request.body?.password === "string" ? request.body.password : "";
+  try {
+    const result = await pool.query(
+      "SELECT username, voornaam, tussenvoegsel, achternaam FROM consultant WHERE username = $1 AND password = $2 LIMIT 1",
+      [username, password],
+    );
+    if (result.rowCount === 0) return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+
+    const token = randomUUID();
+    sessions.set(token, { username, createdAt: Date.now() });
+    response.setHeader("Set-Cookie", `${sessionCookie}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
+    response.json({ name: [result.rows[0].voornaam, result.rows[0].tussenvoegsel, result.rows[0].achternaam].filter(Boolean).join(" ") });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/logout", requireLogin, (request, response) => {
+  const token = request.headers.cookie?.match(new RegExp(`${sessionCookie}=([^;]+)`))?.[1];
+  if (token) sessions.delete(token);
+  response.setHeader("Set-Cookie", `${sessionCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+  response.sendStatus(204);
+});
+
+app.use(requireLogin);
 
 app.get("/api/consultant", async (request, response, next) => {
   try {
@@ -168,7 +213,8 @@ app.delete("/api/appointments/:id", async (request, response, next) => {
 app.use("/api", (request, response) => response.status(404).json({ error: "API-route niet gevonden." }));
 app.get("/", (request, response) => response.sendFile(path.join(__dirname, "index.html")));
 app.get("/styles.css", (request, response) => response.sendFile(path.join(__dirname, "styles.css")));
-app.get("/app.js", (request, response) => response.sendFile(path.join(__dirname, "app.js")));
+app.get("/agenda.js", (request, response) => response.sendFile(path.join(__dirname, "agenda.js")));
+app.get("/form.js", (request, response) => response.sendFile(path.join(__dirname, "form.js")));
 app.use((error, request, response, next) => {
   console.error(error);
   if (response.headersSent) return next(error);
@@ -177,6 +223,23 @@ app.use((error, request, response, next) => {
 
 async function start() {
   if (!process.env.DATABASE_URL) throw new Error("Stel DATABASE_URL in voordat de server start.");
+
+  await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS username VARCHAR(80) NOT NULL DEFAULT 'consultant'");
+  await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS password VARCHAR(255) NOT NULL DEFAULT 'Welkom01'");
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'consultant' AND column_name = 'gebruikersnaam'
+      ) THEN
+        UPDATE consultant
+        SET username = COALESCE(NULLIF(TRIM(gebruikersnaam), ''), username);
+        ALTER TABLE consultant DROP COLUMN gebruikersnaam;
+      END IF;
+    END $$;
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS appointments (
