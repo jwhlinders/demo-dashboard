@@ -1,8 +1,10 @@
-const { randomUUID } = require("node:crypto");
+const { randomUUID, randomBytes, scrypt, timingSafeEqual } = require("node:crypto");
+const { promisify } = require("node:util");
 const path = require("node:path");
 const express = require("express");
 const { Pool } = require("pg");
 
+const scryptAsync = promisify(scrypt);
 const app = express();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const port = Number(process.env.PORT || 3000);
@@ -25,21 +27,94 @@ function requireLogin(request, response, next) {
 }
 
 app.get("/login", (request, response) => response.sendFile(path.join(__dirname, "login.html")));
+app.get("/register", (request, response) => response.sendFile(path.join(__dirname, "register.html")));
+
+app.post("/api/register", async (request, response, next) => {
+  const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
+  const prefix = typeof request.body?.tussenvoegsel === "string" ? request.body.tussenvoegsel.trim() : "";
+  const lastName = typeof request.body?.achternaam === "string" ? request.body.achternaam.trim() : "";
+  const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const password = typeof request.body?.password === "string" ? request.body.password : "";
+  const fullName = [firstName, prefix, lastName].filter(Boolean).join(" ");
+
+  if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || prefix.length > 80 || fullName.length > 80) {
+    return response.status(400).json({ error: "Vul een geldige voornaam en achternaam in (samen maximaal 80 tekens)." });
+  }
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return response.status(400).json({ error: "Vul een geldig e-mailadres in." });
+  }
+  if (!/^[A-Za-z0-9._-]{3,80}$/.test(username)) {
+    return response.status(400).json({ error: "De gebruikersnaam moet 3 tot 80 letters, cijfers of . _ - bevatten." });
+  }
+  if (password.length < 8 || password.length > 128) {
+    return response.status(400).json({ error: "Het wachtwoord moet minimaal 8 en maximaal 128 tekens bevatten." });
+  }
+
+  try {
+    const consultantUsername = await pool.query(
+      "SELECT 1 FROM consultant WHERE LOWER(username) = LOWER($1) LIMIT 1",
+      [username],
+    );
+    if (consultantUsername.rowCount > 0) {
+      return response.status(409).json({ error: "Deze gebruikersnaam is al in gebruik." });
+    }
+
+    const salt = randomBytes(16).toString("hex");
+    const passwordHash = await scryptAsync(password, salt, 64);
+    await pool.query(`
+      INSERT INTO klanten (voornaam, tussenvoegsel, achternaam, email, username, password)
+      VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)
+    `, [firstName, prefix, lastName, email, username, `scrypt$${salt}$${passwordHash.toString("hex")}`]);
+    response.status(201).json({ message: "Je account is aangemaakt." });
+  } catch (error) {
+    if (error.code === "23505") return response.status(409).json({ error: "Deze gebruikersnaam is al in gebruik." });
+    next(error);
+  }
+});
 
 app.post("/api/login", async (request, response, next) => {
   const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
   const password = typeof request.body?.password === "string" ? request.body.password : "";
   try {
-    const result = await pool.query(
-      "SELECT username, voornaam, tussenvoegsel, achternaam FROM consultant WHERE username = $1 AND password = $2 LIMIT 1",
-      [username, password],
+    const consultantResult = await pool.query(
+      "SELECT username, voornaam, tussenvoegsel, achternaam, password FROM consultant WHERE username = $1 LIMIT 1",
+      [username],
     );
-    if (result.rowCount === 0) return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+    let account = consultantResult.rows[0];
+    let role = "consultant";
+    let name = account && [account.voornaam, account.tussenvoegsel, account.achternaam].filter(Boolean).join(" ");
+
+    if (account && account.password !== password) {
+      return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+    }
+    if (!account) {
+      const clientResult = await pool.query(`
+        SELECT username, voornaam, tussenvoegsel, achternaam, password
+        FROM klanten
+        WHERE LOWER(username) = LOWER($1)
+        LIMIT 1
+      `, [username]);
+      account = clientResult.rows[0];
+      const encodedPassword = account?.password || "";
+      if (!account || !/^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/.test(encodedPassword)) {
+        return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+      }
+
+      const [, salt, expectedHex] = encodedPassword.split("$");
+      const expectedHash = Buffer.from(expectedHex, "hex");
+      const suppliedHash = await scryptAsync(password, salt, expectedHash.length);
+      if (!timingSafeEqual(suppliedHash, expectedHash)) {
+        return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+      }
+      role = "client";
+      name = [account.voornaam, account.tussenvoegsel, account.achternaam].filter(Boolean).join(" ");
+    }
 
     const token = randomUUID();
-    sessions.set(token, { username, createdAt: Date.now() });
+    sessions.set(token, { username: account.username, role, name, clientName: role === "client" ? name : null, createdAt: Date.now() });
     response.setHeader("Set-Cookie", `${sessionCookie}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
-    response.json({ name: [result.rows[0].voornaam, result.rows[0].tussenvoegsel, result.rows[0].achternaam].filter(Boolean).join(" ") });
+    response.json({ name });
   } catch (error) {
     next(error);
   }
@@ -55,6 +130,9 @@ app.post("/api/logout", requireLogin, (request, response) => {
 app.use(requireLogin);
 
 app.get("/api/consultant", async (request, response, next) => {
+  const session = getSession(request);
+  if (session.role === "client") return response.json({ name: session.name, role: session.role });
+
   try {
     const result = await pool.query(`
       SELECT TRIM(voornaam) AS first_name,
@@ -63,27 +141,30 @@ app.get("/api/consultant", async (request, response, next) => {
       FROM consultant
       WHERE username = $1
       LIMIT 1
-    `, [getSession(request).username]);
+    `, [session.username]);
     if (result.rowCount === 0) return response.json({ name: "Agenda" });
 
     const consultant = result.rows[0];
     const name = [consultant.first_name, consultant.prefix, consultant.last_name]
       .filter(Boolean)
       .join(" ");
-    response.json({ name: name || "Agenda" });
+    response.json({ name: name || "Agenda", role: session.role });
   } catch (error) {
     next(error);
   }
 });
 
 app.get("/api/clients", async (request, response, next) => {
+  const session = getSession(request);
+  if (session.role === "client") return response.json([session.clientName]);
+
   try {
     const result = await pool.query(`
-      SELECT TRIM(voornaam) || ' ' || TRIM(achternaam) AS name
+      SELECT TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), ''))) AS name
       FROM klanten
       WHERE NULLIF(TRIM(voornaam), '') IS NOT NULL
         AND NULLIF(TRIM(achternaam), '') IS NOT NULL
-      GROUP BY TRIM(voornaam), TRIM(achternaam)
+      GROUP BY TRIM(voornaam), TRIM(tussenvoegsel), TRIM(achternaam)
       ORDER BY TRIM(achternaam), TRIM(voornaam)
     `);
     response.json(result.rows.map((row) => row.name));
@@ -117,6 +198,7 @@ function validateAppointment(body) {
 }
 
 app.get("/api/appointments", async (request, response, next) => {
+  const session = getSession(request);
   try {
     const result = await pool.query(`
       SELECT id,
@@ -126,9 +208,10 @@ app.get("/api/appointments", async (request, response, next) => {
              duration_minutes AS "durationMinutes",
              notes
       FROM appointments
-      WHERE consultant_username = $1
+      WHERE ( $2 = 'consultant' AND consultant_username = $1 )
+         OR ( $2 = 'client' AND client_username = $1 )
       ORDER BY appointment_date, start_time
-    `, [getSession(request).username]);
+    `, [session.username, session.role]);
     response.json(result.rows);
   } catch (error) {
     next(error);
@@ -136,31 +219,34 @@ app.get("/api/appointments", async (request, response, next) => {
 });
 
 app.post("/api/appointments", async (request, response, next) => {
+  if (getSession(request).role === "client") {
+    return response.status(403).json({ error: "Cliënten kunnen afspraken alleen bekijken." });
+  }
   const validationError = validateAppointment(request.body);
   if (validationError) return response.status(400).json({ error: validationError });
 
   const { date, client, start, durationMinutes, notes } = request.body;
   try {
     const matchingClient = await pool.query(`
-      SELECT 1
+            SELECT CASE WHEN COUNT(*) = 1 THEN MAX(username) END AS username,
+              COUNT(*) AS match_count
       FROM klanten
-      WHERE TRIM(CONCAT(voornaam, ' ', achternaam)) = $1
-      LIMIT 1
+      WHERE TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), ''))) = $1
     `, [client]);
-    if (matchingClient.rowCount === 0) {
+    if (matchingClient.rows[0].match_count === "0") {
       return response.status(400).json({ error: "Kies een cliënt uit de lijst." });
     }
 
     const result = await pool.query(`
-      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes, consultant_username)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes, consultant_username, client_username)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id,
                 to_char(appointment_date, 'YYYY-MM-DD') AS date,
                 client,
                 to_char(start_time, 'HH24:MI') AS start,
                 duration_minutes AS "durationMinutes",
                 notes
-    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim(), getSession(request).username]);
+    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim(), getSession(request).username, matchingClient.rows[0].username]);
     response.status(201).json(result.rows[0]);
   } catch (error) {
     next(error);
@@ -168,6 +254,9 @@ app.post("/api/appointments", async (request, response, next) => {
 });
 
 app.patch("/api/appointments/:id", async (request, response, next) => {
+  if (getSession(request).role === "client") {
+    return response.status(403).json({ error: "Cliënten kunnen afspraken alleen bekijken." });
+  }
   try {
     const existingResult = await pool.query(
       "SELECT to_char(appointment_date, 'YYYY-MM-DD') AS date, client FROM appointments WHERE id = $1",
@@ -203,6 +292,9 @@ app.patch("/api/appointments/:id", async (request, response, next) => {
 });
 
 app.delete("/api/appointments/:id", async (request, response, next) => {
+  if (getSession(request).role === "client") {
+    return response.status(403).json({ error: "Cliënten kunnen afspraken alleen bekijken." });
+  }
   try {
     const result = await pool.query("DELETE FROM appointments WHERE id = $1", [request.params.id]);
     if (result.rowCount === 0) return response.sendStatus(404);
@@ -228,6 +320,9 @@ async function start() {
 
   await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS username VARCHAR(80) NOT NULL DEFAULT 'consultant'");
   await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS password VARCHAR(255) NOT NULL DEFAULT 'Welkom01'");
+  await pool.query("ALTER TABLE klanten ADD COLUMN IF NOT EXISTS username VARCHAR(80)");
+  await pool.query("ALTER TABLE klanten ADD COLUMN IF NOT EXISTS password VARCHAR(255)");
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS klanten_username_unique ON klanten (LOWER(username))");
   await pool.query(`
     DO $$
     BEGIN
@@ -256,6 +351,24 @@ async function start() {
     )
   `);
   await pool.query("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS consultant_username VARCHAR(80)");
+  await pool.query("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS client_username VARCHAR(80)");
+  await pool.query("CREATE INDEX IF NOT EXISTS appointments_client_username_idx ON appointments (client_username)");
+  await pool.query(`
+    UPDATE appointments AS appointment
+    SET client_username = customer.username
+    FROM (
+      SELECT TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), ''))) AS client_name,
+             MIN(username) AS username
+      FROM klanten
+      WHERE username IS NOT NULL
+        AND NULLIF(TRIM(voornaam), '') IS NOT NULL
+        AND NULLIF(TRIM(achternaam), '') IS NOT NULL
+      GROUP BY TRIM(voornaam), TRIM(tussenvoegsel), TRIM(achternaam)
+      HAVING COUNT(*) = 1
+    ) AS customer
+    WHERE appointment.client_username IS NULL
+      AND appointment.client = customer.client_name
+  `);
 
   app.listen(port, () => console.log(`Agenda beschikbaar op http://localhost:${port}`));
 }
