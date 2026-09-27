@@ -126,8 +126,9 @@ app.get("/api/appointments", async (request, response, next) => {
              duration_minutes AS "durationMinutes",
              notes
       FROM appointments
+      WHERE consultant_username = $1
       ORDER BY appointment_date, start_time
-    `);
+    `, [getSession(request).username]);
     response.json(result.rows);
   } catch (error) {
     next(error);
@@ -151,15 +152,15 @@ app.post("/api/appointments", async (request, response, next) => {
     }
 
     const result = await pool.query(`
-      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes, consultant_username)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id,
                 to_char(appointment_date, 'YYYY-MM-DD') AS date,
                 client,
                 to_char(start_time, 'HH24:MI') AS start,
                 duration_minutes AS "durationMinutes",
                 notes
-    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim()]);
+    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim(), getSession(request).username]);
     response.status(201).json(result.rows[0]);
   } catch (error) {
     next(error);
@@ -250,9 +251,11 @@ async function start() {
       start_time TIME NOT NULL,
       duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0),
       notes VARCHAR(200) NOT NULL DEFAULT '',
+      consultant_username VARCHAR(80),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS consultant_username VARCHAR(80)");
 
   app.listen(port, () => console.log(`Agenda beschikbaar op http://localhost:${port}`));
 }
