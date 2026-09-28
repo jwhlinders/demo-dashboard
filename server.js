@@ -158,6 +158,85 @@ app.post("/api/change-password", async (request, response, next) => {
   }
 });
 
+app.get("/api/profile", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "client") return response.status(403).json({ error: "Alleen cliënten kunnen hun profiel bekijken." });
+
+  try {
+    const result = await pool.query(`
+      SELECT username, voornaam, COALESCE(tussenvoegsel, '') AS tussenvoegsel,
+             achternaam, COALESCE(telefoonnummer, '') AS telefoonnummer
+      FROM klanten
+      WHERE username = $1
+      LIMIT 1
+    `, [session.username]);
+    if (result.rowCount === 0) return response.status(404).json({ error: "Profiel niet gevonden." });
+    response.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/profile", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "client") return response.status(403).json({ error: "Alleen cliënten kunnen hun profiel wijzigen." });
+
+  const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
+  const prefix = typeof request.body?.tussenvoegsel === "string" ? request.body.tussenvoegsel.trim() : "";
+  const lastName = typeof request.body?.achternaam === "string" ? request.body.achternaam.trim() : "";
+  const phone = typeof request.body?.telefoonnummer === "string" ? request.body.telefoonnummer.trim() : "";
+  const password = typeof request.body?.password === "string" ? request.body.password : "";
+  const passwordConfirmation = typeof request.body?.passwordConfirmation === "string" ? request.body.passwordConfirmation : "";
+  const fullName = [firstName, prefix, lastName].filter(Boolean).join(" ");
+
+  if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || prefix.length > 80 || fullName.length > 80) {
+    return response.status(400).json({ error: "Vul een geldige voornaam en achternaam in (samen maximaal 80 tekens)." });
+  }
+  if (phone.length > 30 || (phone && !/^[+0-9().\-\s]{6,30}$/.test(phone))) {
+    return response.status(400).json({ error: "Vul een geldig telefoonnummer van maximaal 30 tekens in." });
+  }
+  if (password !== passwordConfirmation) {
+    return response.status(400).json({ error: "De wachtwoorden komen niet overeen." });
+  }
+  if (password && (password.length < 8 || password.length > 128 || password === defaultClientPassword)) {
+    return response.status(400).json({ error: "Kies een nieuw wachtwoord van 8 tot 128 tekens." });
+  }
+
+  const database = await pool.connect();
+  try {
+    await database.query("BEGIN");
+    const updates = [firstName, prefix || null, lastName, phone || null, session.username];
+    let passwordUpdate = "";
+    if (password) {
+      const salt = randomBytes(16).toString("hex");
+      const passwordHash = await scryptAsync(password, salt, 64);
+      updates.push(`scrypt$${salt}$${passwordHash.toString("hex")}`);
+      passwordUpdate = `, password = $${updates.length}`;
+    }
+    const result = await database.query(`
+      UPDATE klanten
+      SET voornaam = $1, tussenvoegsel = $2, achternaam = $3,
+          telefoonnummer = $4${passwordUpdate}
+      WHERE username = $5
+      RETURNING username
+    `, updates);
+    if (result.rowCount === 0) {
+      await database.query("ROLLBACK");
+      return response.status(404).json({ error: "Profiel niet gevonden." });
+    }
+    await database.query("UPDATE appointments SET client = $1 WHERE client_username = $2", [fullName, session.username]);
+    await database.query("COMMIT");
+    session.name = fullName;
+    session.clientName = fullName;
+    response.json({ message: "Je profiel is bijgewerkt.", name: fullName });
+  } catch (error) {
+    await database.query("ROLLBACK");
+    next(error);
+  } finally {
+    database.release();
+  }
+});
+
 app.post("/api/logout", requireLogin, (request, response) => {
   const token = request.headers.cookie?.match(new RegExp(`${sessionCookie}=([^;]+)`))?.[1];
   if (token) sessions.delete(token);

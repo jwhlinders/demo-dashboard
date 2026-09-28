@@ -16,6 +16,12 @@
     </div>
     <div class="header-actions">
       <p class="today-label" id="today-label"></p>
+      <button class="profile-button" id="profile-button" type="button" aria-label="Profiel wijzigen" title="Profiel wijzigen" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 21a7 7 0 0 1 14 0" />
+        </svg>
+      </button>
       <button class="logout-button" id="logout-button" type="button" aria-label="Uitloggen" title="Uitloggen">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10 17l5-5-5-5" />
@@ -25,6 +31,53 @@
       </button>
     </div>
   </header>
+
+  <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+    <form id="profile-form">
+      <div class="profile-heading">
+        <div>
+          <p class="eyebrow">Cliëntgegevens</p>
+          <h2 id="profile-title">Mijn profiel</h2>
+        </div>
+        <button class="dialog-close" id="profile-close" type="button" aria-label="Venster sluiten" title="Venster sluiten">&times;</button>
+      </div>
+      <label class="field" for="profile-username">
+        <span>Gebruikersnaam</span>
+        <input id="profile-username" name="username" type="text" readonly aria-readonly="true">
+      </label>
+      <div class="profile-name-fields">
+        <label class="field" for="profile-first-name">
+          <span>Voornaam</span>
+          <input id="profile-first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" required>
+        </label>
+        <label class="field" for="profile-prefix">
+          <span>Tussenvoegsel</span>
+          <input id="profile-prefix" name="tussenvoegsel" type="text" maxlength="80" autocomplete="additional-name">
+        </label>
+        <label class="field" for="profile-last-name">
+          <span>Achternaam</span>
+          <input id="profile-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" required>
+        </label>
+      </div>
+      <label class="field" for="profile-phone">
+        <span>Telefoonnummer</span>
+        <input id="profile-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
+      </label>
+      <label class="field" for="profile-password">
+        <span>Nieuw wachtwoord <span class="optional">optioneel</span></span>
+        <input id="profile-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Laat leeg om niet te wijzigen">
+      </label>
+      <label class="field" for="profile-password-confirmation">
+        <span>Herhaal nieuw wachtwoord</span>
+        <input id="profile-password-confirmation" name="passwordConfirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password">
+      </label>
+      <p class="profile-message" id="profile-message" role="status" hidden></p>
+      <div class="profile-actions">
+        <button class="secondary-button" id="profile-cancel" type="button">Annuleren</button>
+        <button class="primary-button" id="profile-save" type="submit">Profiel opslaan</button>
+      </div>
+    </form>
+  </dialog>
 
   <main class="dashboard">
     <section class="intro" aria-labelledby="page-title">
