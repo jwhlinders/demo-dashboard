@@ -118,6 +118,14 @@ body {
   text-decoration: none;
 }
 
+.brand-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
 .brand-mark {
   width: 32px;
   height: 32px;
@@ -127,6 +135,13 @@ body {
   color: #fff;
   background: var(--green);
   font-size: 18px;
+}
+
+.brand-location {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .today-label {

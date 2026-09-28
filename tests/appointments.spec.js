@@ -45,7 +45,9 @@ test("consultant can log in and see their name", async ({ page }) => {
 
   expect(consultant.name).toBeTruthy();
   expect(consultant.name).not.toBe("Agenda");
+  expect(consultant.locationName).toBeTruthy();
   await expect(page.locator("#consultant-name")).toHaveText(consultant.name);
+  await expect(page.locator("#consultant-location")).toHaveText(`Locatie: ${consultant.locationName}`);
 });
 
 test("consultant can add a new appointment", async ({ page }) => {

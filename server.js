@@ -252,11 +252,17 @@ app.get("/api/consultant", async (request, response, next) => {
 
   try {
     const result = await pool.query(`
-      SELECT TRIM(voornaam) AS first_name,
+      SELECT TRIM(consultant.voornaam) AS first_name,
              TRIM(COALESCE(tussenvoegsel, '')) AS prefix,
-             TRIM(achternaam) AS last_name
+             TRIM(consultant.achternaam) AS last_name,
+             (
+               SELECT locatie.naam
+               FROM locaties AS locatie
+               WHERE locatie.idlocatie = consultant.defaultlocatie
+               LIMIT 1
+             ) AS location_name
       FROM consultant
-      WHERE username = $1
+      WHERE consultant.username = $1
       LIMIT 1
     `, [session.username]);
     if (result.rowCount === 0) return response.json({ name: "Agenda" });
@@ -265,7 +271,7 @@ app.get("/api/consultant", async (request, response, next) => {
     const name = [consultant.first_name, consultant.prefix, consultant.last_name]
       .filter(Boolean)
       .join(" ");
-    response.json({ name: name || "Agenda", role: session.role });
+    response.json({ name: name || "Agenda", role: session.role, locationName: consultant.location_name });
   } catch (error) {
     next(error);
   }

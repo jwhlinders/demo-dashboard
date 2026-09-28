@@ -172,6 +172,9 @@ async function loadAppointments(startEditingAppointment) {
     appointments = loadedAppointments;
     isClientSession = consultant.role === "client";
     document.querySelector("#consultant-name").textContent = consultant.name;
+    const locationLabel = document.querySelector("#consultant-location");
+    locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
+    locationLabel.hidden = !consultant.locationName;
     if (isClientSession) {
       document.querySelector("#profile-button").hidden = false;
       document.querySelector(".workspace").classList.add("client-workspace");
