@@ -16,7 +16,7 @@
       </a>
       <p class="eyebrow">Nieuw account</p>
       <h1 id="register-title">Cliënt registreren</h1>
-      <p class="login-copy">Vul je gegevens in om een account aan te maken.</p>
+      <p class="login-copy">Vul je gegevens in. Je ontvangt automatisch een gebruikersnaam en tijdelijk wachtwoord.</p>
       <form id="register-form">
         <div class="register-fields">
           <label class="field" for="first-name">
@@ -34,14 +34,6 @@
           <label class="field" for="email">
             <span>E-mailadres</span>
             <input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
-          </label>
-          <label class="field" for="username">
-            <span>Gebruikersnaam</span>
-            <input id="username" name="username" type="text" minlength="3" maxlength="80" pattern="[A-Za-z0-9._-]+" autocomplete="username" required>
-          </label>
-          <label class="field" for="password">
-            <span>Wachtwoord</span>
-            <input id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
           </label>
         </div>
         <p class="login-error" id="register-error" role="alert" hidden></p>
@@ -68,7 +60,7 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Registreren is mislukt.");
         form.reset();
-        success.textContent = "Je account is aangemaakt.";
+        success.textContent = `Je account is aangemaakt. Gebruikersnaam: ${result.username}. Tijdelijk wachtwoord: ${result.password}.`;
         success.hidden = false;
       } catch (submitError) {
         error.textContent = submitError.message || "Registreren is mislukt. Controleer je verbinding.";

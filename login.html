@@ -37,17 +37,19 @@
       event.preventDefault();
       const form = event.currentTarget;
       const error = document.querySelector("#login-error");
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(new FormData(form))),
-      });
-      if (!response.ok) {
-        error.textContent = "Ongeldige gebruikersnaam of wachtwoord.";
+      try {
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(form))),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Ongeldige gebruikersnaam of wachtwoord.");
+        window.location.href = result.mustChangePassword ? "/change-password" : "/";
+      } catch (loginError) {
+        error.textContent = loginError.message || "Inloggen is mislukt. Controleer je verbinding.";
         error.hidden = false;
-        return;
       }
-      window.location.href = "/";
     });
   </script>
 </body>
