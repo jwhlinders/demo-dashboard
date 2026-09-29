@@ -25,6 +25,12 @@
           <path d="M5 21a7 7 0 0 1 14 0" />
         </svg>
       </button>
+      <button class="settings-button" id="settings-button" type="button" aria-label="Instellingen" title="Instellingen" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.3" />
+          <path d="M19.4 15a7.64 7.64 0 0 0 .08-1l1.9-1.5-1.8-3.1-2.4 1a6.94 6.94 0 0 0-1.7-1L14.7 4h-5.4l-.5 2.4a6.94 6.94 0 0 0-1.7 1l-2.4-1-1.8 3.1L4.5 14a7.64 7.64 0 0 0 .08 1l-1.9 1.5 1.8 3.1 2.4-1c.5.4 1.1.8 1.7 1l.5 2.4h5.4l.5-2.4c.6-.2 1.2-.6 1.7-1l2.4 1 1.8-3.1-1.9-1.5Z" />
+        </svg>
+      </button>
       <button class="logout-button" id="logout-button" type="button" aria-label="Uitloggen" title="Uitloggen">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10 17l5-5-5-5" />
@@ -83,12 +89,6 @@
   </dialog>
 
   <main class="dashboard">
-    <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">Afspraken in één oogopslag</p>
-      <h1 id="page-title">Cliëntenagenda</h1>
-      <p class="intro-copy">Plan en beheer je afspraken op werkdagen.</p>
-    </section>
-
     <section class="summary" aria-label="Afsprakenoverzicht">
       <article class="summary-item summary-week">
         <span class="summary-label">Afspraken in deze week</span>

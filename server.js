@@ -40,6 +40,11 @@ app.get("/change-password", (request, response) => {
   if (!getSession(request)) return response.redirect("/login");
   response.sendFile(path.join(__dirname, "change-password.html"));
 });
+app.get("/settings", requireLogin, (request, response) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant") return response.redirect("/");
+  response.sendFile(path.join(__dirname, "consultant-settings.html"));
+});
 
 app.post("/api/register", async (request, response, next) => {
   const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
@@ -272,6 +277,34 @@ app.get("/api/consultant", async (request, response, next) => {
       .filter(Boolean)
       .join(" ");
     response.json({ name: name || "Agenda", role: session.role, locationName: consultant.location_name });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/consultant/settings", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant") {
+    return response.status(403).json({ error: "Alleen de consultant kan deze instellingen bekijken." });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT consultant.*,
+             locatie.naam AS location_name,
+             locatie.adres,
+             locatie.postcode,
+             locatie.plaats
+      FROM consultant
+      LEFT JOIN locaties AS locatie ON locatie.idlocatie = consultant.defaultlocatie
+      WHERE consultant.username = $1
+      LIMIT 1
+    `, [session.username]);
+    if (result.rowCount === 0) return response.status(404).json({ error: "Consultant niet gevonden." });
+
+    const consultant = { ...result.rows[0], role: session.role };
+    if (typeof consultant.password === "string") consultant.password = "********";
+    response.json(consultant);
   } catch (error) {
     next(error);
   }

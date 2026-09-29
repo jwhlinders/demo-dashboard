@@ -50,6 +50,21 @@ test("consultant can log in and see their name", async ({ page }) => {
   await expect(page.locator("#consultant-location")).toHaveText(`Locatie: ${consultant.locationName}`);
 });
 
+test("consultant can open the settings page", async ({ page }) => {
+  await expect(page.locator("#settings-button")).toBeVisible();
+  await page.locator("#settings-button").click();
+
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.locator("#settings-title")).toHaveText("Instellingen");
+
+  const response = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
+  expect(response.ok()).toBeTruthy();
+  const consultant = await response.json();
+  expect(consultant.username).toBeTruthy();
+  expect(consultant.password).toBe("********");
+  await expect(page.locator("#consultant-name")).toContainText(`(${consultant.username})`);
+});
+
 test("consultant can add a new appointment", async ({ page }) => {
   const { clientSelect, clientName, dateValue, notes } = await getAppointmentData(page);
   await page.locator("#appointment-date").fill(dateValue);
