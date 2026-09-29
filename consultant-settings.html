@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Instellingen | Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="settings-page">
+  <header class="site-header">
+    <div class="brand" aria-label="Agenda">
+      <span class="brand-mark" aria-hidden="true">&#128197;</span>
+      <div class="brand-copy">
+        <span id="consultant-name">Instellingen</span>
+        <span class="brand-location" id="consultant-location" hidden></span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="secondary-button" id="back-button" type="button">Terug</button>
+      <button class="logout-button" id="logout-button" type="button" aria-label="Uitloggen" title="Uitloggen">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 17l5-5-5-5" />
+          <path d="M15 12H3" />
+          <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="settings-shell">
+    <section class="settings-panel" aria-labelledby="settings-title">
+      <div class="settings-topbar">
+        <div class="settings-heading">
+          <p class="eyebrow">Accountgegevens</p>
+          <h1 id="settings-title">Instellingen</h1>
+        </div>
+      </div>
+
+      <form class="settings-form" id="settings-form">
+        <section class="settings-section" aria-labelledby="contact-details-title">
+          <h3 id="contact-details-title">Contactgegevens</h3>
+          <div class="settings-stack">
+            <div class="field-row field-row-name">
+              <span class="field-label">Naam</span>
+              <div class="field-inline-grid no-sub-labels">
+                <input id="setting-first-name" name="voornaam" type="text" readonly>
+                <input id="setting-prefix" name="tussenvoegsel" type="text" readonly>
+                <input id="setting-last-name" name="achternaam" type="text" readonly>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-email">E-mailadres</label>
+              <input id="setting-email" name="email" type="email" readonly>
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-phone">Telefoonnummer</label>
+              <input id="setting-phone" name="telefoonnummer" type="text" readonly>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="work-location-title">
+          <h3 id="work-location-title">Werklocatie</h3>
+          <div class="settings-stack">
+            <div class="field-row">
+              <span class="field-label">Naam</span>
+              <input id="setting-default-location" name="defaultlocatie" type="text" readonly>
+            </div>
+
+            <div class="field-row field-row-address">
+              <span class="field-label">Adres</span>
+              <div class="field-inline-grid no-sub-labels">
+                <input id="setting-adres" name="adres" type="text" readonly>
+                <input id="setting-postcode" name="postcode" type="text" readonly>
+                <input id="setting-plaats" name="plaats" type="text" readonly>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="other-details-title">
+          <h3 id="other-details-title">Overige gegevens</h3>
+          <div class="settings-stack">
+            <div class="field-row">
+              <label class="field-label" for="setting-role">Rol</label>
+              <input id="setting-role" name="role" type="text" readonly>
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-werkdagen">Werkdagen</label>
+              <input id="setting-werkdagen" name="werkdagen" type="text" readonly>
+            </div>
+
+            <div class="field-row field-row-hours">
+              <span class="field-label">Werktijden</span>
+              <div class="time-inline no-sub-labels">
+                <input id="setting-start-werkdag" name="start_werkdag" type="text" readonly>
+                <span class="time-separator">t/m</span>
+                <input id="setting-einde-werkdag" name="einde_werkdag" type="text" readonly>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <div class="settings-actions">
+          <button class="secondary-button" id="cancel-button" type="button">Annuleren</button>
+          <button class="primary-button" type="button" id="save-button">Opslaan</button>
+        </div>
+      </form>
+      <p id="settings-error" class="login-error" role="alert" hidden></p>
+    </section>
+  </main>
+
+  <script>
+    const settingsError = document.querySelector("#settings-error");
+
+    async function loadConsultantSettings() {
+      try {
+        const response = await fetch("/api/consultant/settings");
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Instellingen konden niet worden geladen.");
+
+        const consultant = result;
+        const fields = {
+          voornaam: consultant.voornaam || "",
+          tussenvoegsel: consultant.tussenvoegsel || "",
+          achternaam: consultant.achternaam || "",
+          telefoonnummer: consultant.telefoonnummer || "",
+          email: consultant.email || "",
+          role: consultant.role || "consultant",
+          defaultlocatie: consultant.location_name || "",
+          adres: consultant.adres || "",
+          postcode: consultant.postcode || "",
+          plaats: consultant.plaats || "",
+          werkdagen: consultant.werkdagen || "",
+          start_werkdag: consultant.start_werkdag || "",
+          einde_werkdag: consultant.einde_werkdag || "",
+          created_at: consultant.aanmaakdatum ? new Date(consultant.aanmaakdatum).toLocaleString("nl-NL") : "",
+        };
+
+        document.querySelector("#setting-first-name").value = fields.voornaam;
+        document.querySelector("#setting-prefix").value = fields.tussenvoegsel;
+        document.querySelector("#setting-last-name").value = fields.achternaam;
+        document.querySelector("#setting-email").value = fields.email;
+        document.querySelector("#setting-phone").value = fields.telefoonnummer;
+        document.querySelector("#setting-role").value = fields.role;
+        document.querySelector("#setting-default-location").value = fields.defaultlocatie;
+        document.querySelector("#setting-adres").value = fields.adres;
+        document.querySelector("#setting-postcode").value = fields.postcode;
+        document.querySelector("#setting-plaats").value = fields.plaats;
+        document.querySelector("#setting-werkdagen").value = fields.werkdagen;
+        document.querySelector("#setting-start-werkdag").value = fields.start_werkdag;
+        document.querySelector("#setting-einde-werkdag").value = fields.einde_werkdag;
+        const name = [consultant.voornaam, consultant.tussenvoegsel, consultant.achternaam].filter(Boolean).join(" ") || "Instellingen";
+        const username = consultant.username ? ` (${consultant.username})` : "";
+        document.querySelector("#consultant-name").textContent = `${name}${username}`;
+      } catch (error) {
+        settingsError.textContent = error.message || "Instellingen konden niet worden geladen.";
+        settingsError.hidden = false;
+      }
+    }
+
+    document.querySelector("#back-button").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+    document.querySelector("#cancel-button").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+    document.querySelector("#save-button").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+    document.querySelector("#logout-button").addEventListener("click", async () => {
+      try {
+        const response = await fetch("/api/logout", { method: "POST" });
+        if (!response.ok) throw new Error("Uitloggen is mislukt.");
+        window.location.href = "/login";
+      } catch (error) {
+        settingsError.textContent = error.message || "Uitloggen is mislukt.";
+        settingsError.hidden = false;
+      }
+    });
+
+    loadConsultantSettings();
+  </script>
+</body>
+</html>

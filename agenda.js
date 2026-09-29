@@ -175,10 +175,11 @@ async function loadAppointments(startEditingAppointment) {
     const locationLabel = document.querySelector("#consultant-location");
     locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
     locationLabel.hidden = !consultant.locationName;
+    const settingsButton = document.querySelector("#settings-button");
+    settingsButton.hidden = isClientSession;
     if (isClientSession) {
       document.querySelector("#profile-button").hidden = false;
       document.querySelector(".workspace").classList.add("client-workspace");
-      document.querySelector(".intro-copy").textContent = "Bekijk je afspraken.";
       document.querySelector(".form-panel").hidden = true;
       document.querySelector(".calendar-filter").hidden = true;
     }
@@ -215,6 +216,9 @@ async function loadAppointments(startEditingAppointment) {
 
 const { startEditingAppointment } = initForm();
 document.querySelector("#today-label").textContent = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+document.querySelector("#settings-button").addEventListener("click", () => {
+  window.location.href = "/settings";
+});
 document.querySelector("#logout-button").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   button.disabled = true;
