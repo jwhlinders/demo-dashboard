@@ -9,7 +9,7 @@ Applicatie voor het bijhouden van agendaitems.
 4. Start de app met `npm start`.
 5. Open `http://localhost:3000`.
 
-De server maakt de tabel `appointments` automatisch aan. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
+De server maakt de tabel `appointments` automatisch aan. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
 
 ## Cliëntaccounts
 

@@ -107,6 +107,7 @@ test("consultant can see an appointment in the agenda", async ({ page }) => {
       options.map((option) => option.value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
     );
     expect(new Set(clientFilterValues).size).toBe(clientFilterValues.length);
+    expect(clientFilterValues).toContain(clientName.trim().toLocaleLowerCase("nl-NL"));
     const today = new Date();
     const appointmentDate = new Date(`${dateValue}T00:00:00`);
     const monday = (date) => {

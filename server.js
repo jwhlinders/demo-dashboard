@@ -230,7 +230,6 @@ app.patch("/api/profile", async (request, response, next) => {
       await database.query("ROLLBACK");
       return response.status(404).json({ error: "Profiel niet gevonden." });
     }
-    await database.query("UPDATE appointments SET client = $1 WHERE client_username = $2", [fullName, session.username]);
     await database.query("COMMIT");
     session.name = fullName;
     session.clientName = fullName;
@@ -386,13 +385,15 @@ app.get("/api/appointments", async (request, response, next) => {
     const result = await pool.query(`
       SELECT appointment.id,
            to_char(appointment.appointment_date, 'YYYY-MM-DD') AS date,
-           appointment.client,
+           TRIM(CONCAT_WS(' ', NULLIF(TRIM(customer.voornaam), ''), NULLIF(TRIM(customer.tussenvoegsel), ''), NULLIF(TRIM(customer.achternaam), ''))) AS client,
+           appointment.client_username AS "clientUsername",
            COALESCE(NULLIF(TRIM(CONCAT_WS(' ', NULLIF(TRIM(consultant.voornaam), ''), NULLIF(TRIM(consultant.tussenvoegsel), ''), NULLIF(TRIM(consultant.achternaam), ''))), ''), consultant.username) AS "consultantName",
            to_char(appointment.start_time, 'HH24:MI') AS start,
            appointment.duration_minutes AS "durationMinutes",
            appointment.notes,
            appointment.aangevraagd
       FROM appointments AS appointment
+      INNER JOIN klanten AS customer ON customer.username = appointment.client_username
       LEFT JOIN LATERAL (
         SELECT username, voornaam, tussenvoegsel, achternaam
         FROM consultant
@@ -454,17 +455,22 @@ app.post("/api/appointments", async (request, response, next) => {
     }
 
     const result = await pool.query(`
-      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes, consultant_username, client_username, aangevraagd)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id,
-                to_char(appointment_date, 'YYYY-MM-DD') AS date,
-                client,
-                client_username AS "clientUsername",
-                to_char(start_time, 'HH24:MI') AS start,
-                duration_minutes AS "durationMinutes",
-                notes,
-                aangevraagd
-    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim(), consultantUsername, clientUsername, clientRequest]);
+      WITH inserted_appointment AS (
+        INSERT INTO appointments (id, appointment_date, start_time, duration_minutes, notes, consultant_username, client_username, aangevraagd)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, appointment_date, client_username, start_time, duration_minutes, notes, aangevraagd
+      )
+      SELECT appointment.id,
+             to_char(appointment.appointment_date, 'YYYY-MM-DD') AS date,
+             TRIM(CONCAT_WS(' ', NULLIF(TRIM(customer.voornaam), ''), NULLIF(TRIM(customer.tussenvoegsel), ''), NULLIF(TRIM(customer.achternaam), ''))) AS client,
+             appointment.client_username AS "clientUsername",
+             to_char(appointment.start_time, 'HH24:MI') AS start,
+             appointment.duration_minutes AS "durationMinutes",
+             appointment.notes,
+             appointment.aangevraagd
+      FROM inserted_appointment AS appointment
+      INNER JOIN klanten AS customer ON customer.username = appointment.client_username
+    `, [randomUUID(), date, start, Number(durationMinutes), (notes || "").trim(), consultantUsername, clientUsername, clientRequest]);
     response.status(201).json(result.rows[0]);
   } catch (error) {
     next(error);
@@ -476,8 +482,13 @@ app.patch("/api/appointments/:id", async (request, response, next) => {
     return response.status(403).json({ error: "Cliënten kunnen afspraken alleen bekijken." });
   }
   try {
-    const existingResult = await pool.query(
-      "SELECT to_char(appointment_date, 'YYYY-MM-DD') AS date, client FROM appointments WHERE id = $1",
+    const existingResult = await pool.query(`
+      SELECT to_char(appointment.appointment_date, 'YYYY-MM-DD') AS date,
+             TRIM(CONCAT_WS(' ', NULLIF(TRIM(customer.voornaam), ''), NULLIF(TRIM(customer.tussenvoegsel), ''), NULLIF(TRIM(customer.achternaam), ''))) AS client
+      FROM appointments AS appointment
+      INNER JOIN klanten AS customer ON customer.username = appointment.client_username
+      WHERE appointment.id = $1
+    `,
       [request.params.id],
     );
     if (existingResult.rowCount === 0) return response.sendStatus(404);
@@ -493,16 +504,22 @@ app.patch("/api/appointments/:id", async (request, response, next) => {
     if (validationError) return response.status(400).json({ error: validationError });
 
     const result = await pool.query(`
-      UPDATE appointments
-      SET start_time = $1, duration_minutes = $2, notes = $3
-      WHERE id = $4
-      RETURNING id,
-                to_char(appointment_date, 'YYYY-MM-DD') AS date,
-                client,
-                to_char(start_time, 'HH24:MI') AS start,
-                duration_minutes AS "durationMinutes",
-                notes,
-                aangevraagd
+      WITH updated_appointment AS (
+        UPDATE appointments
+        SET start_time = $1, duration_minutes = $2, notes = $3
+        WHERE id = $4
+        RETURNING id, appointment_date, client_username, start_time, duration_minutes, notes, aangevraagd
+      )
+      SELECT appointment.id,
+             to_char(appointment.appointment_date, 'YYYY-MM-DD') AS date,
+             TRIM(CONCAT_WS(' ', NULLIF(TRIM(customer.voornaam), ''), NULLIF(TRIM(customer.tussenvoegsel), ''), NULLIF(TRIM(customer.achternaam), ''))) AS client,
+             appointment.client_username AS "clientUsername",
+             to_char(appointment.start_time, 'HH24:MI') AS start,
+             appointment.duration_minutes AS "durationMinutes",
+             appointment.notes,
+             appointment.aangevraagd
+      FROM updated_appointment AS appointment
+      INNER JOIN klanten AS customer ON customer.username = appointment.client_username
     `, [request.body.start, Number(request.body.durationMinutes), (request.body.notes || "").trim(), request.params.id]);
     response.json(result.rows[0]);
   } catch (error) {
