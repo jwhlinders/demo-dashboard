@@ -59,18 +59,21 @@ export function setStorageStatus(message, isError = false) {
 
 function updateClientFilter() {
   const selectedClient = clientFilter.value;
-  const clients = [...new Set(appointments.map((appointment) => appointment.client))]
+  const clients = [...new Map(appointments.map((appointment) => [
+    appointment.client.trim().toLocaleLowerCase("nl-NL"),
+    appointment.client.trim(),
+  ])).values()]
     .sort((first, second) => first.localeCompare(second, "nl"));
   clientFilter.replaceChildren(new Option("Alle cliënten", ""));
   for (const client of clients) clientFilter.add(new Option(client, client));
-  clientFilter.value = clients.includes(selectedClient) ? selectedClient : "";
+  clientFilter.value = clients.find((client) => client.toLocaleLowerCase("nl-NL") === selectedClient.trim().toLocaleLowerCase("nl-NL")) || "";
   clientFilter.disabled = clients.length === 0;
 }
 
 function getVisibleAppointments() {
-  const selectedClient = clientFilter.value;
+  const selectedClient = clientFilter.value.trim().toLocaleLowerCase("nl-NL");
   return selectedClient
-    ? appointments.filter((appointment) => appointment.client === selectedClient)
+    ? appointments.filter((appointment) => appointment.client.trim().toLocaleLowerCase("nl-NL") === selectedClient)
     : appointments;
 }
 
@@ -84,9 +87,11 @@ function updateSummary() {
   const today = localDateString();
   const todayAppointments = visibleAppointments.filter((appointment) => appointment.date === today);
   const upcomingAppointments = visibleAppointments.filter((appointment) => appointment.date >= today);
+  const requestedAppointments = visibleAppointments.filter((appointment) => appointment.aangevraagd);
   document.querySelector("#weekly-count").textContent = String(weekAppointments.length);
   document.querySelector("#today-count").textContent = String(todayAppointments.length);
   document.querySelector("#appointment-count").textContent = String(upcomingAppointments.length);
+  document.querySelector("#requested-count").textContent = String(requestedAppointments.length);
 }
 
 export function renderCalendar() {
@@ -184,6 +189,8 @@ async function loadAppointments(startEditingAppointment) {
     const [loadedAppointments, clients, consultant] = await Promise.all([appointmentsResponse.json(), clientsResponse.json(), consultantResponse.json()]);
     appointments = loadedAppointments;
     isClientSession = consultant.role === "client";
+    document.querySelector(".summary").classList.toggle("is-client", isClientSession);
+    document.querySelector("#requested-summary").hidden = isClientSession;
     document.querySelector("#consultant-name").textContent = consultant.name;
     const locationLabel = document.querySelector("#consultant-location");
     locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
@@ -264,7 +271,23 @@ document.querySelector("#logout-button").addEventListener("click", async (event)
 document.querySelector("#previous-week").addEventListener("click", () => { selectedWeek.setDate(selectedWeek.getDate() - 7); renderCalendar(); });
 document.querySelector("#next-week").addEventListener("click", () => { selectedWeek.setDate(selectedWeek.getDate() + 7); renderCalendar(); });
 document.querySelector("#current-week").addEventListener("click", () => { selectedWeek = getWeekStart(); renderCalendar(); });
-clientFilter.addEventListener("change", renderCalendar);
+document.querySelector("#requested-summary-button").addEventListener("click", () => {
+  const today = localDateString();
+  const firstUpcomingRequest = getVisibleAppointments()
+    .filter((appointment) => appointment.aangevraagd && appointment.date >= today)
+    .sort((first, second) => first.date.localeCompare(second.date) || first.start.localeCompare(second.start))[0];
+  if (!firstUpcomingRequest) return;
+  setSelectedWeek(getWeekStart(parseLocalDate(firstUpcomingRequest.date)));
+  renderCalendar();
+});
+clientFilter.addEventListener("change", () => {
+  const today = localDateString();
+  const firstUpcomingAppointment = getVisibleAppointments()
+    .filter((appointment) => appointment.date >= today)
+    .sort((first, second) => first.date.localeCompare(second.date) || first.start.localeCompare(second.start))[0];
+  if (firstUpcomingAppointment) setSelectedWeek(getWeekStart(parseLocalDate(firstUpcomingAppointment.date)));
+  renderCalendar();
+});
 
 const profileDialog = document.querySelector("#profile-dialog");
 const profileForm = document.querySelector("#profile-form");

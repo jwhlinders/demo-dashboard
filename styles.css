@@ -615,7 +615,7 @@ h1 {
 .summary {
   min-height: 58px;
   display: grid;
-  grid-template-columns: 1.1fr 1.1fr 0.8fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 22px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -638,6 +638,30 @@ h1 {
 
 .summary-count {
   background: #fff8e8;
+}
+
+.summary-requested {
+  background: #edf5f6;
+}
+
+.summary.is-client {
+  grid-template-columns: 1.1fr 1.1fr 0.8fr;
+}
+
+.summary-action {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.summary-action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }
 
 .summary-label {
@@ -1486,6 +1510,15 @@ td.hours-cell {
   .summary-count {
     grid-column: 1 / -1;
     border-top: 1px solid var(--line);
+  }
+
+  .summary:not(.is-client) .summary-count {
+    grid-column: auto;
+    border-top: 0;
+  }
+
+  .summary:not(.is-client) .summary-requested {
+    border-left: 1px solid var(--line);
   }
 
   .summary-value {

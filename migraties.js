@@ -106,18 +106,77 @@ async function runMigrations(pool) {
   await pool.query(`
     UPDATE appointments AS appointment
     SET client_username = customer.username
-    FROM (
-      SELECT TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), ''))) AS client_name,
-             MIN(username) AS username
+    FROM klanten AS customer
+    WHERE appointment.id = ANY($1::uuid[])
+      AND customer.username = $2
+  `, [[
+    "b4ba14ed-0e63-4353-960b-eadee6035e57",
+    "4682d519-70f2-4a13-a568-ec40e5edb210",
+    "0a928583-7781-46fb-8d45-853eec36c38c",
+  ], "aberg"]);
+  await pool.query(`
+    WITH customer_names AS (
+      SELECT username,
+             LOWER(TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), '')))) AS full_name,
+             LOWER(TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(achternaam), '')))) AS first_last_name
       FROM klanten
       WHERE username IS NOT NULL
         AND NULLIF(TRIM(voornaam), '') IS NOT NULL
         AND NULLIF(TRIM(achternaam), '') IS NOT NULL
-      GROUP BY TRIM(voornaam), TRIM(tussenvoegsel), TRIM(achternaam)
-      HAVING COUNT(*) = 1
-    ) AS customer
-    WHERE appointment.client_username IS NULL
-      AND appointment.client = customer.client_name
+    ), unique_names AS (
+      SELECT normalized_name, MIN(username) AS username
+      FROM (
+        SELECT full_name AS normalized_name, username FROM customer_names
+        UNION ALL
+        SELECT first_last_name AS normalized_name, username FROM customer_names
+      ) AS name_variants
+      GROUP BY normalized_name
+      HAVING COUNT(DISTINCT username) = 1
+    )
+    UPDATE appointments AS appointment
+    SET client_username = customer.username
+    FROM unique_names AS customer
+    WHERE LOWER(BTRIM(appointment.client)) = customer.normalized_name
+      AND (appointment.client_username IS NULL OR NOT EXISTS (
+        SELECT 1 FROM klanten AS linked_customer WHERE linked_customer.username = appointment.client_username
+      ))
+  `);
+
+  const unresolvedAppointment = await pool.query(`
+    SELECT appointment.id, appointment.client
+    FROM appointments AS appointment
+    LEFT JOIN klanten AS customer ON customer.username = appointment.client_username
+    WHERE customer.username IS NULL
+    ORDER BY appointment.appointment_date, appointment.start_time
+  `);
+  if (unresolvedAppointment.rowCount > 0) {
+    const unresolvedDetails = unresolvedAppointment.rows.map(({ id, client }) => `${id} (${client})`).join(", ");
+    throw new Error(`Appointments cannot be linked to customer accounts: ${unresolvedDetails}. Resolve them before starting the server.`);
+  }
+
+  await pool.query(`
+    UPDATE appointments AS appointment
+    SET client = TRIM(CONCAT_WS(' ', NULLIF(TRIM(customer.voornaam), ''), NULLIF(TRIM(customer.tussenvoegsel), ''), NULLIF(TRIM(customer.achternaam), '')))
+    FROM klanten AS customer
+    WHERE customer.username = appointment.client_username
+      AND appointment.client IS DISTINCT FROM TRIM(CONCAT_WS(' ', NULLIF(TRIM(customer.voornaam), ''), NULLIF(TRIM(customer.tussenvoegsel), ''), NULLIF(TRIM(customer.achternaam), '')))
+  `);
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS klanten_username_exact_unique ON klanten (username)");
+  await pool.query("ALTER TABLE appointments ALTER COLUMN client_username SET NOT NULL");
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'appointments_client_username_fkey'
+          AND conrelid = 'appointments'::regclass
+      ) THEN
+        ALTER TABLE appointments
+          ADD CONSTRAINT appointments_client_username_fkey
+          FOREIGN KEY (client_username) REFERENCES klanten (username);
+      END IF;
+    END $$;
   `);
 }
 

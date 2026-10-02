@@ -345,11 +345,11 @@ app.get("/api/appointment-options", async (request, response, next) => {
       ORDER BY locatie.naam, consultant.achternaam, consultant.voornaam
     `);
     const locations = [...new Map(result.rows.map((row) => [row.location_id, { id: row.location_id, name: row.location_name }])).values()];
-    const consultants = result.rows.map((row) => ({
+    const consultants = [...new Map(result.rows.map((row) => [row.username.trim().toLocaleLowerCase("nl-NL"), {
       username: row.username,
       name: row.name || row.username,
       locationId: row.location_id,
-    }));
+    }])).values()];
     response.json({ locations, consultants });
   } catch (error) {
     next(error);
@@ -393,7 +393,13 @@ app.get("/api/appointments", async (request, response, next) => {
            appointment.notes,
            appointment.aangevraagd
       FROM appointments AS appointment
-      LEFT JOIN consultant ON consultant.username = appointment.consultant_username
+      LEFT JOIN LATERAL (
+        SELECT username, voornaam, tussenvoegsel, achternaam
+        FROM consultant
+        WHERE consultant.username = appointment.consultant_username
+        ORDER BY consultant.id
+        LIMIT 1
+      ) AS consultant ON TRUE
       WHERE ( $2 = 'consultant' AND appointment.consultant_username = $1 )
         OR ( $2 = 'client' AND appointment.client_username = $1 )
       ORDER BY appointment.appointment_date, appointment.start_time
@@ -441,8 +447,8 @@ app.post("/api/appointments", async (request, response, next) => {
       FROM klanten
       WHERE TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), ''))) = $1
     `, [client]);
-      if (matchingClient.rows[0].match_count === "0") {
-        return response.status(400).json({ error: "Kies een cliënt uit de lijst." });
+      if (matchingClient.rows[0].match_count !== "1" || !matchingClient.rows[0].username) {
+        return response.status(400).json({ error: "Kies een cliënt met een uniek account uit de lijst." });
       }
       clientUsername = matchingClient.rows[0].username;
     }
@@ -453,6 +459,7 @@ app.post("/api/appointments", async (request, response, next) => {
       RETURNING id,
                 to_char(appointment_date, 'YYYY-MM-DD') AS date,
                 client,
+                client_username AS "clientUsername",
                 to_char(start_time, 'HH24:MI') AS start,
                 duration_minutes AS "durationMinutes",
                 notes,
