@@ -12,6 +12,8 @@ import {
 const form = document.querySelector("#appointment-form");
 const dateInput = document.querySelector("#appointment-date");
 const clientInput = document.querySelector("#appointment-client");
+const locationInput = document.querySelector("#appointment-location");
+const consultantInput = document.querySelector("#appointment-consultant");
 const startHourInput = document.querySelector("#appointment-hour");
 const startMinuteInput = document.querySelector("#appointment-minute");
 const durationInput = document.querySelector("#appointment-duration");
@@ -19,6 +21,7 @@ const formModeLabel = document.querySelector("#form-mode-label");
 const formSubmitButton = document.querySelector("#form-submit-button");
 const cancelEditButton = document.querySelector("#cancel-edit-button");
 let editingAppointmentId = null;
+let isClientRequestForm = false;
 
 function localDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -36,11 +39,13 @@ function getInitialWorkday() {
 
 function resetAppointmentForm() {
   editingAppointmentId = null;
-  formModeLabel.textContent = "Nieuwe afspraak";
-  formSubmitButton.innerHTML = '<span aria-hidden="true">+</span>Afspraak opslaan';
+  formModeLabel.textContent = isClientRequestForm ? "Afspraak aanvragen" : "Nieuwe afspraak";
+  formSubmitButton.innerHTML = isClientRequestForm
+    ? '<span aria-hidden="true">+</span>Aanvraag versturen'
+    : '<span aria-hidden="true">+</span>Afspraak opslaan';
   cancelEditButton.hidden = true;
   dateInput.disabled = false;
-  clientInput.disabled = clientInput.options.length <= 1;
+  clientInput.disabled = isClientRequestForm || clientInput.options.length <= 1;
   form.reset();
   dateInput.value = localDateString(getInitialWorkday());
   clientInput.value = "";
@@ -68,6 +73,35 @@ function startEditingAppointment(appointment) {
   startHourInput.focus();
 }
 
+function setClientRequestMode({ locations, consultants }) {
+  isClientRequestForm = true;
+  document.querySelector("#form-mode-label").textContent = "Afspraak aanvragen";
+  document.querySelector("#form-title").textContent = "Afspraak voorstellen";
+  document.querySelector("#appointment-client-field").hidden = true;
+  document.querySelector("#appointment-location-field").hidden = false;
+  document.querySelector("#appointment-consultant-field").hidden = false;
+  clientInput.disabled = true;
+  durationInput.disabled = true;
+  document.querySelector("#appointment-notes").previousElementSibling.textContent = "Reden gesprek";
+  document.querySelector("#appointment-notes").placeholder = "Beschrijf waarvoor je een gesprek wilt";
+  document.querySelector("#appointment-notes").required = true;
+  formSubmitButton.innerHTML = '<span aria-hidden="true">+</span>Aanvraag versturen';
+
+  locationInput.replaceChildren(new Option("Selecteer een locatie", "", true, true));
+  for (const location of locations) locationInput.add(new Option(location.name, String(location.id)));
+  locationInput.disabled = locations.length === 0;
+  consultantInput.replaceChildren(new Option("Kies eerst een locatie", "", true, true));
+  consultantInput.disabled = true;
+  locationInput.addEventListener("change", () => {
+    const matchingConsultants = consultants.filter((consultant) => String(consultant.locationId) === locationInput.value);
+    consultantInput.replaceChildren(new Option("Selecteer een consultant", "", true, true));
+    for (const consultant of matchingConsultants) {
+      consultantInput.add(new Option(consultant.name, consultant.username));
+    }
+    consultantInput.disabled = matchingConsultants.length === 0;
+  });
+}
+
 export function loadClients(clients) {
   const placeholder = document.createElement("option");
   placeholder.value = "";
@@ -81,7 +115,7 @@ export function loadClients(clients) {
     option.textContent = client;
     clientInput.append(option);
   }
-  clientInput.disabled = clients.length === 0;
+  clientInput.disabled = isClientRequestForm || clients.length === 0;
 }
 
 export function initForm() {
@@ -111,7 +145,7 @@ export function initForm() {
     if (!form.reportValidity()) return;
     const formData = new FormData(form);
     const start = `${formData.get("startHour")}:${formData.get("startMinute")}`;
-    const durationMinutes = Number(formData.get("duration"));
+    const durationMinutes = isClientRequestForm ? 30 : Number(formData.get("duration"));
     if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || getEndTime(start, durationMinutes) === null) {
       durationInput.setCustomValidity("Kies een duur die op dezelfde werkdag eindigt.");
       durationInput.reportValidity();
@@ -120,9 +154,9 @@ export function initForm() {
     durationInput.setCustomValidity("");
     const appointmentData = {
       date: String(formData.get("date")),
-      client: String(formData.get("client")).trim(),
+      client: isClientRequestForm ? "" : String(formData.get("client")).trim(),
       start,
-      durationMinutes,
+      durationMinutes: isClientRequestForm ? 30 : durationMinutes,
       notes: String(formData.get("notes")).trim(),
     };
 
@@ -146,7 +180,12 @@ export function initForm() {
       return;
     }
 
-    if (!appointmentData.client || !isWorkday(appointmentData.date)) return;
+    if ((!isClientRequestForm && !appointmentData.client) || !isWorkday(appointmentData.date)) return;
+    if (isClientRequestForm) {
+      appointmentData.locationId = Number(locationInput.value);
+      appointmentData.consultantUsername = consultantInput.value;
+      if (!appointmentData.notes || !appointmentData.locationId || !appointmentData.consultantUsername) return;
+    }
     try {
       const response = await fetch("/api/appointments", {
         method: "POST",
@@ -154,8 +193,10 @@ export function initForm() {
         body: JSON.stringify(appointmentData),
       });
       if (!response.ok) throw new Error("Opslaan is mislukt.");
-      appointments.push(await response.json());
-      setStorageStatus("Je afspraken worden opgeslagen in PostgreSQL.");
+      const createdAppointment = await response.json();
+      if (isClientRequestForm) createdAppointment.consultantName = consultantInput.selectedOptions[0].textContent;
+      appointments.push(createdAppointment);
+      setStorageStatus(isClientRequestForm ? "Je afspraakaanvraag is verstuurd en wacht op bevestiging." : "Je afspraken worden opgeslagen in PostgreSQL.");
     } catch {
       setStorageStatus("De afspraak kon niet worden opgeslagen. Controleer de databaseverbinding.", true);
       return;
@@ -163,8 +204,8 @@ export function initForm() {
     setSelectedWeek(getWeekStart(parseLocalDate(appointmentData.date)));
     renderCalendar();
     resetAppointmentForm();
-    clientInput.focus();
+    (isClientRequestForm ? locationInput : clientInput).focus();
   });
 
-  return { startEditingAppointment };
+  return { startEditingAppointment, setClientRequestMode };
 }

@@ -936,6 +936,18 @@ td.hours-cell {
   cursor: pointer;
 }
 
+.appointment-status-button {
+  margin-bottom: 7px;
+  padding: 0;
+  border: 0;
+  color: var(--coral);
+  background: transparent;
+  font: 700 11px "Trebuchet MS", "Segoe UI", sans-serif;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .appointment-actions,
 .edit-actions {
   display: flex;
@@ -1063,7 +1075,11 @@ td.hours-cell {
 }
 
 .workspace.client-workspace {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(270px, 0.78fr) minmax(0, 1.65fr);
+}
+
+.field[hidden] {
+  display: none;
 }
 
 #appointment-form {

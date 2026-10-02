@@ -101,6 +101,7 @@ async function runMigrations(pool) {
   `);
   await pool.query("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS consultant_username VARCHAR(80)");
   await pool.query("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS client_username VARCHAR(80)");
+  await pool.query("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS aangevraagd BOOLEAN NOT NULL DEFAULT FALSE");
   await pool.query("CREATE INDEX IF NOT EXISTS appointments_client_username_idx ON appointments (client_username)");
   await pool.query(`
     UPDATE appointments AS appointment
