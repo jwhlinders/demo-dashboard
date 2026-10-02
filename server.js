@@ -589,7 +589,10 @@ app.delete("/api/appointments/:id", async (request, response, next) => {
 app.use("/api", (request, response) => response.status(404).json({ error: "API-route niet gevonden." }));
 app.get("/", (request, response) => response.sendFile(path.join(__dirname, "index.html")));
 app.get("/styles.css", (request, response) => response.sendFile(path.join(__dirname, "styles.css")));
-app.get("/agenda.js", (request, response) => response.sendFile(path.join(__dirname, "agenda.js")));
+app.get("/agenda-controller.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-controller.js")));
+app.get("/agenda-calendar.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-calendar.js")));
+app.get("/agenda-date.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-date.js")));
+app.get("/agenda-profile.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-profile.js")));
 app.get("/form.js", (request, response) => response.sendFile(path.join(__dirname, "form.js")));
 app.use((error, request, response, next) => {
   console.error(error);
