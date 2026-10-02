@@ -63,6 +63,27 @@ test("consultant can open the settings page", async ({ page }) => {
   expect(consultant.username).toBeTruthy();
   expect(consultant.password).toBe("********");
   await expect(page.locator("#consultant-name")).toContainText(`(${consultant.username})`);
+  for (const weekday of ["Ma", "Di", "Wo", "Do", "Vr"]) {
+    const isWorkday = consultant.werkdagen.toLocaleLowerCase("nl-NL").includes(weekday.toLocaleLowerCase("nl-NL"));
+    const checkbox = page.locator(`[data-weekday="${weekday}"]`);
+    await expect(checkbox).toBeChecked({ checked: isWorkday });
+  }
+
+  const mondayWasEnabled = consultant.werkdagen.includes("Ma");
+  const monday = page.locator('[data-weekday="Ma"]');
+  try {
+    await monday.uncheck();
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Werkdagen zijn opgeslagen.");
+    const updatedResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
+    const updatedConsultant = await updatedResponse.json();
+    expect(updatedConsultant.werkdagen.includes("Ma")).toBe(false);
+    await expect(monday).not.toBeChecked();
+  } finally {
+    if (mondayWasEnabled) await monday.check();
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Werkdagen zijn opgeslagen.");
+  }
 });
 
 test("consultant can add a new appointment", async ({ page }) => {

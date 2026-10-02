@@ -421,6 +421,33 @@ body {
   background: #fff;
 }
 
+.weekday-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.weekday-option {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.weekday-option input[type="checkbox"] {
+  width: 15px;
+  min-height: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--green);
+}
+
 .time-inline {
   display: flex;
   align-items: flex-end;
@@ -457,6 +484,12 @@ body {
 .settings-empty {
   margin: 18px 0 0;
   color: var(--muted);
+}
+
+.settings-status {
+  margin: 0 18px 18px;
+  color: var(--green-dark);
+  font-size: 13px;
 }
 
 @media (max-width: 720px) {

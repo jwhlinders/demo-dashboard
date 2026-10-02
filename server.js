@@ -282,6 +282,31 @@ app.get("/api/consultant", async (request, response, next) => {
   }
 });
 
+app.patch("/api/consultant/settings/workdays", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant") {
+    return response.status(403).json({ error: "Alleen de consultant kan werkdagen wijzigen." });
+  }
+
+  const weekdays = request.body?.werkdagen;
+  const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
+  if (!Array.isArray(weekdays) || weekdays.some((weekday) => !validWeekdays.includes(weekday))) {
+    return response.status(400).json({ error: "Kies geldige werkdagen." });
+  }
+
+  const werkdagenValue = validWeekdays.filter((weekday) => weekdays.includes(weekday)).join("");
+  try {
+    const result = await pool.query(
+      "UPDATE consultant SET werkdagen = $1 WHERE username = $2 RETURNING werkdagen",
+      [werkdagenValue, session.username],
+    );
+    if (result.rowCount === 0) return response.status(404).json({ error: "Consultant niet gevonden." });
+    response.json({ werkdagen: result.rows[0].werkdagen });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/consultant/settings", async (request, response, next) => {
   const session = getSession(request);
   if (!session || session.role !== "consultant") {
