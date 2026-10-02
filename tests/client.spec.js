@@ -26,6 +26,7 @@ test("client can request an appointment with a consultant at a standard location
   const password = process.env.E2E_CLIENT_PASSWORD;
   test.skip(!username || !password, "Set E2E_CLIENT_USERNAME and E2E_CLIENT_PASSWORD to run this test.");
 
+  const requestedCountBefore = Number(await page.locator("#requested-count").textContent());
   const clientContext = await browser.newContext();
   const clientPage = await clientContext.newPage();
   let appointment;
@@ -36,10 +37,14 @@ test("client can request an appointment with a consultant at a standard location
     await clientPage.getByRole("button", { name: "Inloggen" }).click();
     await expect(clientPage).toHaveURL(/\/$/);
 
+    const profileResponse = await clientPage.request.get(new URL("/api/profile", page.url()).toString());
+    expect(profileResponse.ok()).toBeTruthy();
+    const clientProfile = await profileResponse.json();
     const optionsResponse = await clientPage.request.get(new URL("/api/appointment-options", page.url()).toString());
     expect(optionsResponse.ok()).toBeTruthy();
     const options = await optionsResponse.json();
     expect(options.locations.length).toBeGreaterThan(0);
+    expect(new Set(options.consultants.map((item) => item.username.trim().toLocaleLowerCase("nl-NL"))).size).toBe(options.consultants.length);
     const consultantResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
     expect(consultantResponse.ok()).toBeTruthy();
     const loggedInConsultant = await consultantResponse.json();
@@ -70,21 +75,20 @@ test("client can request an appointment with a consultant at a standard location
     expect(response.status()).toBe(201);
     appointment = await response.json();
     expect(appointment.date).toBe(dateValue);
+    expect(appointment.clientUsername).toBe(clientProfile.username);
     expect(appointment.durationMinutes).toBe(30);
     expect(appointment.notes).toBe(reason);
     expect(appointment.aangevraagd).toBe(true);
     await expect(clientPage.locator("#storage-status")).toContainText("wacht op bevestiging");
+    await expect(clientPage.locator("#requested-summary")).toBeHidden();
     await expect(clientPage.getByRole("button", { name: "Aanvraag versturen" })).toBeVisible();
     await expect(clientPage.locator(".appointment-card").filter({ hasText: reason })).toContainText(consultant.name);
 
     await page.reload();
-    const monday = (date) => {
-      const weekStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-      return weekStart;
-    };
-    if (monday(appointmentDate) > monday(new Date())) await page.locator("#next-week").click();
+    await expect.poll(async () => Number(await page.locator("#requested-count").textContent())).toBe(requestedCountBefore + 1);
+    await page.locator("#requested-summary-button").click();
     const appointmentCard = page.locator(".appointment-card").filter({ hasText: reason });
+    await expect(appointmentCard).toBeVisible();
     const confirmButton = appointmentCard.getByRole("button", { name: "Status: aangevraagd" });
     await expect(confirmButton).toBeVisible();
     await confirmButton.click();

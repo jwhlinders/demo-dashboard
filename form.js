@@ -1,13 +1,10 @@
 import {
   appointments,
-  getEndTime,
-  getWeekStart,
-  isWorkday,
-  parseLocalDate,
   renderCalendar,
   setSelectedWeek,
   setStorageStatus,
-} from "./agenda.js";
+} from "./agenda-calendar.js";
+import { getEndTime, getWeekStart, isWorkday, localDateString, parseLocalDate } from "./agenda-date.js";
 
 const form = document.querySelector("#appointment-form");
 const dateInput = document.querySelector("#appointment-date");
@@ -22,13 +19,6 @@ const formSubmitButton = document.querySelector("#form-submit-button");
 const cancelEditButton = document.querySelector("#cancel-edit-button");
 let editingAppointmentId = null;
 let isClientRequestForm = false;
-
-function localDateString(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function getInitialWorkday() {
   const date = new Date();

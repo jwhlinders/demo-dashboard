@@ -90,8 +90,29 @@
             </div>
 
             <div class="field-row">
-              <label class="field-label" for="setting-werkdagen">Werkdagen</label>
-              <input id="setting-werkdagen" name="werkdagen" type="text" readonly>
+              <span class="field-label">Werkdagen</span>
+              <div class="weekday-list" role="group" aria-label="Werkdagen">
+                <label class="weekday-option">
+                  <input type="checkbox" data-weekday="Ma">
+                  <span>Ma</span>
+                </label>
+                <label class="weekday-option">
+                  <input type="checkbox" data-weekday="Di">
+                  <span>Di</span>
+                </label>
+                <label class="weekday-option">
+                  <input type="checkbox" data-weekday="Wo">
+                  <span>Wo</span>
+                </label>
+                <label class="weekday-option">
+                  <input type="checkbox" data-weekday="Do">
+                  <span>Do</span>
+                </label>
+                <label class="weekday-option">
+                  <input type="checkbox" data-weekday="Vr">
+                  <span>Vr</span>
+                </label>
+              </div>
             </div>
 
             <div class="field-row field-row-hours">
@@ -111,6 +132,7 @@
           <button class="primary-button" type="button" id="save-button">Opslaan</button>
         </div>
       </form>
+      <p id="settings-status" class="settings-status" role="status" hidden></p>
       <p id="settings-error" class="login-error" role="alert" hidden></p>
     </section>
   </main>
@@ -136,7 +158,6 @@
           adres: consultant.adres || "",
           postcode: consultant.postcode || "",
           plaats: consultant.plaats || "",
-          werkdagen: consultant.werkdagen || "",
           start_werkdag: consultant.start_werkdag || "",
           einde_werkdag: consultant.einde_werkdag || "",
           created_at: consultant.aanmaakdatum ? new Date(consultant.aanmaakdatum).toLocaleString("nl-NL") : "",
@@ -152,7 +173,11 @@
         document.querySelector("#setting-adres").value = fields.adres;
         document.querySelector("#setting-postcode").value = fields.postcode;
         document.querySelector("#setting-plaats").value = fields.plaats;
-        document.querySelector("#setting-werkdagen").value = fields.werkdagen;
+        for (const checkbox of document.querySelectorAll("[data-weekday]")) {
+          const isWorkday = typeof consultant.werkdagen === "string"
+            && consultant.werkdagen.toLocaleLowerCase("nl-NL").includes(checkbox.dataset.weekday.toLocaleLowerCase("nl-NL"));
+          checkbox.checked = isWorkday;
+        }
         document.querySelector("#setting-start-werkdag").value = fields.start_werkdag;
         document.querySelector("#setting-einde-werkdag").value = fields.einde_werkdag;
         const name = [consultant.voornaam, consultant.tussenvoegsel, consultant.achternaam].filter(Boolean).join(" ") || "Instellingen";
@@ -170,8 +195,30 @@
     document.querySelector("#cancel-button").addEventListener("click", () => {
       window.location.href = "/";
     });
-    document.querySelector("#save-button").addEventListener("click", () => {
-      window.location.href = "/";
+    document.querySelector("#save-button").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const status = document.querySelector("#settings-status");
+      settingsError.hidden = true;
+      status.hidden = true;
+      button.disabled = true;
+      const werkdagen = [...document.querySelectorAll("[data-weekday]:checked")]
+        .map((checkbox) => checkbox.dataset.weekday);
+      try {
+        const response = await fetch("/api/consultant/settings/workdays", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ werkdagen }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Werkdagen konden niet worden opgeslagen.");
+        status.textContent = "Werkdagen zijn opgeslagen.";
+        status.hidden = false;
+      } catch (error) {
+        settingsError.textContent = error.message || "Werkdagen konden niet worden opgeslagen.";
+        settingsError.hidden = false;
+      } finally {
+        button.disabled = false;
+      }
     });
     document.querySelector("#logout-button").addEventListener("click", async () => {
       try {

@@ -63,6 +63,27 @@ test("consultant can open the settings page", async ({ page }) => {
   expect(consultant.username).toBeTruthy();
   expect(consultant.password).toBe("********");
   await expect(page.locator("#consultant-name")).toContainText(`(${consultant.username})`);
+  for (const weekday of ["Ma", "Di", "Wo", "Do", "Vr"]) {
+    const isWorkday = consultant.werkdagen.toLocaleLowerCase("nl-NL").includes(weekday.toLocaleLowerCase("nl-NL"));
+    const checkbox = page.locator(`[data-weekday="${weekday}"]`);
+    await expect(checkbox).toBeChecked({ checked: isWorkday });
+  }
+
+  const mondayWasEnabled = consultant.werkdagen.includes("Ma");
+  const monday = page.locator('[data-weekday="Ma"]');
+  try {
+    await monday.uncheck();
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Werkdagen zijn opgeslagen.");
+    const updatedResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
+    const updatedConsultant = await updatedResponse.json();
+    expect(updatedConsultant.werkdagen.includes("Ma")).toBe(false);
+    await expect(monday).not.toBeChecked();
+  } finally {
+    if (mondayWasEnabled) await monday.check();
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Werkdagen zijn opgeslagen.");
+  }
 });
 
 test("consultant can add a new appointment", async ({ page }) => {
@@ -84,6 +105,7 @@ test("consultant can add a new appointment", async ({ page }) => {
 
   try {
     expect(appointment.client).toBe(clientName);
+    expect(appointment.clientUsername).toBeTruthy();
     expect(appointment.date).toBe(dateValue);
     expect(appointment.start).toBe("10:15");
     expect(appointment.notes).toBe(notes);
@@ -102,6 +124,11 @@ test("consultant can see an appointment in the agenda", async ({ page }) => {
 
   try {
     await page.reload();
+    const clientFilterValues = await page.locator("#agenda-client-filter option").evaluateAll((options) =>
+      options.map((option) => option.value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
+    );
+    expect(new Set(clientFilterValues).size).toBe(clientFilterValues.length);
+    expect(clientFilterValues).toContain(clientName.trim().toLocaleLowerCase("nl-NL"));
     const today = new Date();
     const appointmentDate = new Date(`${dateValue}T00:00:00`);
     const monday = (date) => {
@@ -112,6 +139,7 @@ test("consultant can see an appointment in the agenda", async ({ page }) => {
     if (monday(appointmentDate) > monday(today)) await page.locator("#next-week").click();
 
     const appointmentCard = page.locator(".appointment-card").filter({ hasText: notes });
+  await expect(appointmentCard).toHaveCount(1);
     await expect(appointmentCard).toContainText(clientName);
     await expect(appointmentCard).toContainText("10:15 - 10:45");
     await expect(appointmentCard).toContainText(notes);
