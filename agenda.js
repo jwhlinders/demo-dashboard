@@ -132,8 +132,21 @@ export function renderCalendar() {
       time.textContent = `${appointment.start} - ${getEndTime(appointment.start, appointment.durationMinutes)}`;
       const client = document.createElement("h3");
       client.className = "appointment-client";
-      client.textContent = appointment.client;
+      client.textContent = isClientSession ? appointment.consultantName || appointment.client : appointment.client;
       card.append(time, client);
+      if (!isClientSession && appointment.aangevraagd) {
+        const requestStatus = document.createElement("button");
+        requestStatus.className = "appointment-status-button";
+        requestStatus.type = "button";
+        requestStatus.dataset.confirmId = appointment.id;
+        requestStatus.textContent = "Status: aangevraagd";
+        card.append(requestStatus);
+      } else {
+        const requestStatus = document.createElement("p");
+        requestStatus.className = "appointment-notes";
+        requestStatus.textContent = `Status: ${appointment.aangevraagd ? "aangevraagd" : "definitief"}`;
+        card.append(requestStatus);
+      }
       if (appointment.notes) {
         const notes = document.createElement("p");
         notes.className = "appointment-notes";
@@ -180,8 +193,10 @@ async function loadAppointments(startEditingAppointment) {
     if (isClientSession) {
       document.querySelector("#profile-button").hidden = false;
       document.querySelector(".workspace").classList.add("client-workspace");
-      document.querySelector(".form-panel").hidden = true;
       document.querySelector(".calendar-filter").hidden = true;
+      const optionsResponse = await fetch("/api/appointment-options");
+      if (!optionsResponse.ok) throw new Error("Aanvraagopties laden mislukt");
+      setClientRequestMode(await optionsResponse.json());
     }
     loadClients(clients);
     setStorageStatus(clients.length ? "Je afspraken worden opgeslagen in PostgreSQL." : "Geen cliënten gevonden in de tabel klanten.", clients.length === 0);
@@ -191,6 +206,21 @@ async function loadAppointments(startEditingAppointment) {
   }
   renderCalendar();
   calendarGrid.addEventListener("click", async (event) => {
+    const confirmButton = event.target.closest("button[data-confirm-id]");
+    if (confirmButton) {
+      try {
+        const response = await fetch(`/api/appointments/${encodeURIComponent(confirmButton.dataset.confirmId)}/confirm`, { method: "PATCH" });
+        if (!response.ok) throw new Error("Bevestigen is mislukt.");
+        const confirmedAppointment = await response.json();
+        const appointment = appointments.find((item) => item.id === confirmedAppointment.id);
+        if (appointment) appointment.aangevraagd = false;
+        setStorageStatus("De afspraak is definitief bevestigd.");
+        renderCalendar();
+      } catch {
+        setStorageStatus("De aanvraag kon niet worden bevestigd. Controleer de databaseverbinding.", true);
+      }
+      return;
+    }
     const editButton = event.target.closest("button[data-edit-id]");
     if (editButton) {
       const appointment = appointments.find((item) => item.id === editButton.dataset.editId);
@@ -214,7 +244,7 @@ async function loadAppointments(startEditingAppointment) {
   });
 }
 
-const { startEditingAppointment } = initForm();
+const { startEditingAppointment, setClientRequestMode } = initForm();
 document.querySelector("#today-label").textContent = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
 document.querySelector("#settings-button").addEventListener("click", () => {
   window.location.href = "/settings";

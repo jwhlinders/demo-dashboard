@@ -4,6 +4,7 @@ const path = require("node:path");
 const express = require("express");
 const { Pool } = require("pg");
 const { DEFAULT_CLIENT_PASSWORD: defaultClientPassword, makeAccountBase, runMigrations } = require("./migraties");
+const { seedTestData } = require("./testdata");
 
 const scryptAsync = promisify(scrypt);
 const app = express();
@@ -329,6 +330,32 @@ app.get("/api/clients", async (request, response, next) => {
   }
 });
 
+app.get("/api/appointment-options", async (request, response, next) => {
+  if (getSession(request).role !== "client") {
+    return response.status(403).json({ error: "Alleen cliënten kunnen afspraakopties bekijken." });
+  }
+  try {
+    const result = await pool.query(`
+      SELECT consultant.username,
+             TRIM(CONCAT_WS(' ', NULLIF(TRIM(consultant.voornaam), ''), NULLIF(TRIM(consultant.tussenvoegsel), ''), NULLIF(TRIM(consultant.achternaam), ''))) AS name,
+             locatie.idlocatie AS location_id,
+             locatie.naam AS location_name
+      FROM consultant
+      INNER JOIN locaties AS locatie ON locatie.idlocatie = consultant.defaultlocatie
+      ORDER BY locatie.naam, consultant.achternaam, consultant.voornaam
+    `);
+    const locations = [...new Map(result.rows.map((row) => [row.location_id, { id: row.location_id, name: row.location_name }])).values()];
+    const consultants = result.rows.map((row) => ({
+      username: row.username,
+      name: row.name || row.username,
+      locationId: row.location_id,
+    }));
+    response.json({ locations, consultants });
+  } catch (error) {
+    next(error);
+  }
+});
+
 function validateAppointment(body) {
   const date = typeof body?.date === "string" ? body.date : "";
   const dateValue = new Date(`${date}T00:00:00Z`);
@@ -357,16 +384,19 @@ app.get("/api/appointments", async (request, response, next) => {
   const session = getSession(request);
   try {
     const result = await pool.query(`
-      SELECT id,
-             to_char(appointment_date, 'YYYY-MM-DD') AS date,
-             client,
-             to_char(start_time, 'HH24:MI') AS start,
-             duration_minutes AS "durationMinutes",
-             notes
-      FROM appointments
-      WHERE ( $2 = 'consultant' AND consultant_username = $1 )
-         OR ( $2 = 'client' AND client_username = $1 )
-      ORDER BY appointment_date, start_time
+      SELECT appointment.id,
+           to_char(appointment.appointment_date, 'YYYY-MM-DD') AS date,
+           appointment.client,
+           COALESCE(NULLIF(TRIM(CONCAT_WS(' ', NULLIF(TRIM(consultant.voornaam), ''), NULLIF(TRIM(consultant.tussenvoegsel), ''), NULLIF(TRIM(consultant.achternaam), ''))), ''), consultant.username) AS "consultantName",
+           to_char(appointment.start_time, 'HH24:MI') AS start,
+           appointment.duration_minutes AS "durationMinutes",
+           appointment.notes,
+           appointment.aangevraagd
+      FROM appointments AS appointment
+      LEFT JOIN consultant ON consultant.username = appointment.consultant_username
+      WHERE ( $2 = 'consultant' AND appointment.consultant_username = $1 )
+        OR ( $2 = 'client' AND appointment.client_username = $1 )
+      ORDER BY appointment.appointment_date, appointment.start_time
     `, [session.username, session.role]);
     response.json(result.rows);
   } catch (error) {
@@ -375,34 +405,59 @@ app.get("/api/appointments", async (request, response, next) => {
 });
 
 app.post("/api/appointments", async (request, response, next) => {
-  if (getSession(request).role === "client") {
-    return response.status(403).json({ error: "Cliënten kunnen afspraken alleen bekijken." });
-  }
-  const validationError = validateAppointment(request.body);
+  const session = getSession(request);
+  const clientRequest = session.role === "client";
+  const client = clientRequest ? session.clientName : request.body?.client;
+  const durationMinutes = clientRequest ? 30 : request.body?.durationMinutes;
+  const validationError = validateAppointment({ ...request.body, client, durationMinutes });
   if (validationError) return response.status(400).json({ error: validationError });
+  if (clientRequest && (typeof request.body?.notes !== "string" || !request.body.notes.trim())) {
+    return response.status(400).json({ error: "Vul de reden voor het gesprek in." });
+  }
 
-  const { date, client, start, durationMinutes, notes } = request.body;
+  const { date, start, notes } = request.body;
+  let consultantUsername = session.username;
+  let clientUsername;
   try {
-    const matchingClient = await pool.query(`
+    if (clientRequest) {
+      const requestedConsultant = typeof request.body?.consultantUsername === "string" ? request.body.consultantUsername.trim() : "";
+      const locationId = Number(request.body?.locationId);
+      if (!requestedConsultant || !Number.isInteger(locationId)) {
+        return response.status(400).json({ error: "Kies een locatie en consultant." });
+      }
+      const matchingConsultant = await pool.query(
+        "SELECT username FROM consultant WHERE username = $1 AND defaultlocatie = $2",
+        [requestedConsultant, locationId],
+      );
+      if (matchingConsultant.rowCount === 0) {
+        return response.status(400).json({ error: "De gekozen consultant hoort niet bij deze locatie." });
+      }
+      consultantUsername = matchingConsultant.rows[0].username;
+      clientUsername = session.username;
+    } else {
+      const matchingClient = await pool.query(`
             SELECT CASE WHEN COUNT(*) = 1 THEN MAX(username) END AS username,
               COUNT(*) AS match_count
       FROM klanten
       WHERE TRIM(CONCAT_WS(' ', NULLIF(TRIM(voornaam), ''), NULLIF(TRIM(tussenvoegsel), ''), NULLIF(TRIM(achternaam), ''))) = $1
     `, [client]);
-    if (matchingClient.rows[0].match_count === "0") {
-      return response.status(400).json({ error: "Kies een cliënt uit de lijst." });
+      if (matchingClient.rows[0].match_count === "0") {
+        return response.status(400).json({ error: "Kies een cliënt uit de lijst." });
+      }
+      clientUsername = matchingClient.rows[0].username;
     }
 
     const result = await pool.query(`
-      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes, consultant_username, client_username)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO appointments (id, appointment_date, client, start_time, duration_minutes, notes, consultant_username, client_username, aangevraagd)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id,
                 to_char(appointment_date, 'YYYY-MM-DD') AS date,
                 client,
                 to_char(start_time, 'HH24:MI') AS start,
                 duration_minutes AS "durationMinutes",
-                notes
-    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim(), getSession(request).username, matchingClient.rows[0].username]);
+                notes,
+                aangevraagd
+    `, [randomUUID(), date, client.trim(), start, Number(durationMinutes), (notes || "").trim(), consultantUsername, clientUsername, clientRequest]);
     response.status(201).json(result.rows[0]);
   } catch (error) {
     next(error);
@@ -439,8 +494,30 @@ app.patch("/api/appointments/:id", async (request, response, next) => {
                 client,
                 to_char(start_time, 'HH24:MI') AS start,
                 duration_minutes AS "durationMinutes",
-                notes
+                notes,
+                aangevraagd
     `, [request.body.start, Number(request.body.durationMinutes), (request.body.notes || "").trim(), request.params.id]);
+    response.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/appointments/:id/confirm", async (request, response, next) => {
+  const session = getSession(request);
+  if (session.role !== "consultant") {
+    return response.status(403).json({ error: "Alleen de consultant kan een aanvraag bevestigen." });
+  }
+  try {
+    const result = await pool.query(`
+      UPDATE appointments
+      SET aangevraagd = FALSE
+      WHERE id = $1 AND consultant_username = $2 AND aangevraagd = TRUE
+      RETURNING id, aangevraagd
+    `, [request.params.id, session.username]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "De aangevraagde afspraak is niet gevonden." });
+    }
     response.json(result.rows[0]);
   } catch (error) {
     next(error);
@@ -475,6 +552,7 @@ async function start() {
   if (!process.env.DATABASE_URL) throw new Error("Stel DATABASE_URL in voordat de server start.");
 
   await runMigrations(pool);
+  await seedTestData(pool);
   app.listen(port, () => console.log(`Agenda beschikbaar op http://localhost:${port}`));
 }
 

@@ -120,10 +120,24 @@
             <input id="appointment-date" name="date" type="date" required>
           </label>
 
-          <label class="field" for="appointment-client">
+          <label class="field" id="appointment-client-field" for="appointment-client">
             <span>Cliënt</span>
             <select id="appointment-client" name="client" required disabled>
               <option value="" selected disabled>Cliënten laden...</option>
+            </select>
+          </label>
+
+          <label class="field" id="appointment-location-field" for="appointment-location" hidden>
+            <span>Locatie</span>
+            <select id="appointment-location" name="locationId" required disabled>
+              <option value="" selected disabled>Kies een locatie</option>
+            </select>
+          </label>
+
+          <label class="field" id="appointment-consultant-field" for="appointment-consultant" hidden>
+            <span>Consultant</span>
+            <select id="appointment-consultant" name="consultantUsername" required disabled>
+              <option value="" selected disabled>Kies eerst een locatie</option>
             </select>
           </label>
 
@@ -141,7 +155,7 @@
                 </label>
               </div>
             </div>
-            <label class="field" for="appointment-duration">
+            <label class="field" id="appointment-duration-field" for="appointment-duration">
               <span>Duur</span>
               <div class="input-suffix">
                 <input id="appointment-duration" name="duration" type="number" min="15" max="720" step="5" value="30" required>
