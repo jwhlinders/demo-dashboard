@@ -1,4 +1,4 @@
-const { randomUUID, randomBytes, scrypt, timingSafeEqual } = require("node:crypto");
+const { createHash, randomUUID, randomBytes, randomInt, scrypt, timingSafeEqual } = require("node:crypto");
 const { promisify } = require("node:util");
 const path = require("node:path");
 const express = require("express");
@@ -12,6 +12,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const port = Number(process.env.PORT || 3000);
 const sessions = new Map();
 const sessionCookie = "agenda_session";
+const trackingCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false }));
@@ -37,6 +38,8 @@ function requireLogin(request, response, next) {
 
 app.get("/login", (request, response) => response.sendFile(path.join(__dirname, "login.html")));
 app.get("/register", (request, response) => response.sendFile(path.join(__dirname, "register.html")));
+app.get("/password-reset-request", (request, response) => response.sendFile(path.join(__dirname, "password-reset-request.html")));
+app.get("/password-reset-status", (request, response) => response.sendFile(path.join(__dirname, "password-reset-status.html")));
 app.get("/change-password", (request, response) => {
   if (!getSession(request)) return response.redirect("/login");
   response.sendFile(path.join(__dirname, "change-password.html"));
@@ -91,6 +94,139 @@ app.post("/api/register", async (request, response, next) => {
   } catch (error) {
     await database.query("ROLLBACK");
     if (error.code === "23505") return response.status(409).json({ error: "Er bestaat al een account met dit e-mailadres." });
+    next(error);
+  } finally {
+    database.release();
+  }
+});
+
+app.post("/api/password-reset-requests", async (request, response, next) => {
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  if (!username || username.length > 80) {
+    return response.status(400).json({ error: "Vul een geldige gebruikersnaam in." });
+  }
+
+  try {
+    let trackingCode;
+    let inserted = false;
+    for (let attempt = 0; attempt < 5 && !inserted; attempt += 1) {
+      trackingCode = Array.from(
+        { length: 8 },
+        () => trackingCodeAlphabet[randomInt(trackingCodeAlphabet.length)],
+      ).join("");
+      const trackingCodeHash = createHash("sha256").update(trackingCode).digest("hex");
+      const result = await pool.query(`
+        INSERT INTO password_reset_requests (id, client_username, tracking_token_hash)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (tracking_token_hash) WHERE tracking_token_hash IS NOT NULL DO NOTHING
+        RETURNING id
+      `, [randomUUID(), username, trackingCodeHash]);
+      inserted = result.rowCount > 0;
+    }
+    if (!inserted) throw new Error("Er kon geen unieke statuscode worden aangemaakt.");
+    response.json({
+      message: "Als deze gebruikersnaam bij een cliëntaccount hoort, is de aanvraag bij de beheerder ingediend.",
+      trackingCode,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/password-reset-status", async (request, response, next) => {
+  const trackingCode = typeof request.body?.trackingCode === "string" ? request.body.trackingCode.trim() : "";
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const isNewCode = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/i.test(trackingCode);
+  const isLegacyCode = /^[a-f0-9]{48}$/i.test(trackingCode);
+  if ((!isNewCode && !isLegacyCode) || !username || username.length > 80) {
+    return response.status(404).json({ error: "Geen aanvraag gevonden met deze statuscode." });
+  }
+
+  const normalizedCode = isNewCode ? trackingCode.toUpperCase() : trackingCode.toLowerCase();
+  const trackingCodeHash = createHash("sha256").update(normalizedCode).digest("hex");
+  try {
+    const result = await pool.query(`
+      SELECT CASE WHEN password_changed_at IS NOT NULL THEN 'wachtwoord_gewijzigd' ELSE status END AS status,
+             created_at AS "createdAt"
+      FROM password_reset_requests
+      WHERE tracking_token_hash = $1
+        AND LOWER(client_username) = LOWER($2)
+      LIMIT 1
+    `, [trackingCodeHash, username]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: "Geen aanvraag gevonden met deze statuscode." });
+    }
+    response.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/password-reset-complete", async (request, response, next) => {
+  const trackingCode = typeof request.body?.trackingCode === "string" ? request.body.trackingCode.trim() : "";
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const password = typeof request.body?.password === "string" ? request.body.password : "";
+  const passwordConfirmation = typeof request.body?.passwordConfirmation === "string" ? request.body.passwordConfirmation : "";
+  const isNewCode = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/i.test(trackingCode);
+  const isLegacyCode = /^[a-f0-9]{48}$/i.test(trackingCode);
+
+  if ((!isNewCode && !isLegacyCode) || !username || username.length > 80) {
+    return response.status(400).json({ error: "Vul de juiste gebruikersnaam en statuscode in." });
+  }
+  if (password !== passwordConfirmation) {
+    return response.status(400).json({ error: "De wachtwoorden komen niet overeen." });
+  }
+  if (password.length < 8 || password.length > 128 || password === defaultClientPassword) {
+    return response.status(400).json({ error: "Kies een nieuw wachtwoord van 8 tot 128 tekens." });
+  }
+
+  const normalizedCode = isNewCode ? trackingCode.toUpperCase() : trackingCode.toLowerCase();
+  const trackingCodeHash = createHash("sha256").update(normalizedCode).digest("hex");
+  const database = await pool.connect();
+  try {
+    await database.query("BEGIN");
+    const requestResult = await database.query(`
+      SELECT id, client_username, status, password_changed_at
+      FROM password_reset_requests
+      WHERE tracking_token_hash = $1
+        AND LOWER(client_username) = LOWER($2)
+      LIMIT 1
+      FOR UPDATE
+    `, [trackingCodeHash, username]);
+    const resetRequest = requestResult.rows[0];
+    if (!resetRequest) {
+      await database.query("ROLLBACK");
+      return response.status(404).json({ error: "Geen aanvraag gevonden met deze gebruikersnaam en statuscode." });
+    }
+    if (resetRequest.status !== "afgehandeld") {
+      await database.query("ROLLBACK");
+      return response.status(409).json({ error: "De beheerder moet de aanvraag eerst afhandelen." });
+    }
+    if (resetRequest.password_changed_at) {
+      await database.query("ROLLBACK");
+      return response.status(409).json({ error: "Voor deze aanvraag is het wachtwoord al gewijzigd." });
+    }
+
+    const salt = randomBytes(16).toString("hex");
+    const passwordHash = await scryptAsync(password, salt, 64);
+    const clientResult = await database.query(`
+      UPDATE klanten
+      SET password = $1
+      WHERE LOWER(username) = LOWER($2)
+      RETURNING username
+    `, [`scrypt$${salt}$${passwordHash.toString("hex")}`, resetRequest.client_username]);
+    if (clientResult.rowCount === 0) {
+      await database.query("ROLLBACK");
+      return response.status(404).json({ error: "Geen cliëntaccount gevonden voor deze aanvraag." });
+    }
+    await database.query(
+      "UPDATE password_reset_requests SET password_changed_at = NOW() WHERE id = $1",
+      [resetRequest.id],
+    );
+    await database.query("COMMIT");
+    response.json({ message: "Je wachtwoord is gewijzigd. Je kunt nu inloggen." });
+  } catch (error) {
+    await database.query("ROLLBACK");
     next(error);
   } finally {
     database.release();
@@ -162,6 +298,12 @@ app.post("/api/change-password", async (request, response, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.get("/api/change-password", (request, response) => {
+  const session = getSession(request);
+  if (!session || session.role !== "client") return response.status(401).json({ error: "Log eerst in als cliënt." });
+  response.json({ username: session.username });
 });
 
 app.get("/api/profile", async (request, response, next) => {
@@ -330,6 +472,61 @@ app.get("/api/consultant/settings", async (request, response, next) => {
     const consultant = { ...result.rows[0], role: session.role };
     if (typeof consultant.password === "string") consultant.password = "********";
     response.json(consultant);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/consultant/password-reset-requests", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant") {
+    return response.status(403).json({ error: "Alleen de beheerder kan wachtwoordaanvragen bekijken." });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT request.id,
+             request.client_username AS username,
+             CONCAT_WS(' ', client.voornaam, NULLIF(client.tussenvoegsel, ''), client.achternaam) AS name,
+             COALESCE(client.telefoonnummer, '') AS telefoonnummer,
+             (client.username IS NOT NULL) AS "accountExists",
+             request.status,
+             request.created_at AS "createdAt"
+      FROM password_reset_requests AS request
+      LEFT JOIN klanten AS client ON LOWER(client.username) = LOWER(request.client_username)
+      WHERE request.status <> 'afgehandeld'
+      ORDER BY request.created_at
+    `);
+    response.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/consultant/password-reset-requests/:id", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant") {
+    return response.status(403).json({ error: "Alleen de beheerder kan wachtwoordaanvragen afhandelen." });
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.params.id)) {
+    return response.status(400).json({ error: "Ongeldig aanvraagnummer." });
+  }
+  const status = request.body?.status;
+  if (!["in_behandeling", "afgehandeld"].includes(status)) {
+    return response.status(400).json({ error: "Kies een geldige status." });
+  }
+
+  try {
+    const handledAt = status === "afgehandeld" ? new Date() : null;
+    const handledBy = status === "afgehandeld" ? session.username : null;
+    const result = await pool.query(`
+      UPDATE password_reset_requests
+      SET status = $2, handled_at = $3, handled_by = $4
+      WHERE id = $1 AND status <> 'afgehandeld'
+      RETURNING id
+    `, [request.params.id, status, handledAt, handledBy]);
+    if (result.rowCount === 0) return response.status(404).json({ error: "Open wachtwoordaanvraag niet gevonden." });
+    response.json({ message: "Status van de aanvraag is bijgewerkt." });
   } catch (error) {
     next(error);
   }
