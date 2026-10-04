@@ -178,6 +178,30 @@ async function runMigrations(pool) {
       END IF;
     END $$;
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_requests (
+      id UUID PRIMARY KEY,
+      client_username VARCHAR(80) NOT NULL,
+      tracking_token_hash VARCHAR(64),
+      status VARCHAR(20) NOT NULL DEFAULT 'nieuw',
+      password_changed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      handled_at TIMESTAMPTZ,
+      handled_by VARCHAR(80)
+    )
+  `);
+  await pool.query("ALTER TABLE password_reset_requests DROP CONSTRAINT IF EXISTS password_reset_requests_client_username_fkey");
+  await pool.query("ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS tracking_token_hash VARCHAR(64)");
+  await pool.query("ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'nieuw'");
+  await pool.query("ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ");
+  await pool.query("UPDATE password_reset_requests SET status = 'afgehandeld' WHERE handled_at IS NOT NULL AND status = 'nieuw'");
+  await pool.query("DROP INDEX IF EXISTS password_reset_requests_open_client_unique");
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS password_reset_requests_tracking_token_hash_unique
+    ON password_reset_requests (tracking_token_hash)
+    WHERE tracking_token_hash IS NOT NULL
+  `);
 }
 
 module.exports = { DEFAULT_CLIENT_PASSWORD, makeAccountBase, runMigrations };

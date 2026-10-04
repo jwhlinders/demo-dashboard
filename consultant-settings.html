@@ -132,6 +132,13 @@
           <button class="primary-button" type="button" id="save-button">Opslaan</button>
         </div>
       </form>
+      <section class="settings-form" aria-labelledby="password-reset-requests-title">
+        <section class="settings-section" aria-labelledby="password-reset-requests-title">
+          <h3 id="password-reset-requests-title">Wachtwoordaanvragen</h3>
+          <p class="settings-status" id="password-reset-requests-empty">Er zijn geen open wachtwoordaanvragen.</p>
+          <ul class="password-reset-list" id="password-reset-requests"></ul>
+        </section>
+      </section>
       <p id="settings-status" class="settings-status" role="status" hidden></p>
       <p id="settings-error" class="login-error" role="alert" hidden></p>
     </section>
@@ -139,6 +146,70 @@
 
   <script>
     const settingsError = document.querySelector("#settings-error");
+
+    async function loadPasswordResetRequests() {
+      const list = document.querySelector("#password-reset-requests");
+      const emptyMessage = document.querySelector("#password-reset-requests-empty");
+      try {
+        const response = await fetch("/api/consultant/password-reset-requests");
+        const requests = await response.json();
+        if (!response.ok) throw new Error(requests.error || "Wachtwoordaanvragen konden niet worden geladen.");
+
+        list.replaceChildren();
+        emptyMessage.hidden = requests.length > 0;
+        for (const request of requests) {
+          const item = document.createElement("li");
+          const details = document.createElement("div");
+          const title = document.createElement("strong");
+          const contact = document.createElement("p");
+          const date = document.createElement("p");
+          const actions = document.createElement("div");
+          const inProgressButton = document.createElement("button");
+          const resolveButton = document.createElement("button");
+
+          const accountType = request.accountType === "client"
+            ? "Cliënt"
+            : request.accountType === "consultant" ? "Consultant" : "";
+          title.textContent = `${request.name || request.username} (${request.username})${accountType ? ` · ${accountType}` : ""}`;
+          contact.textContent = request.telefoonnummer || "Geen telefoonnummer geregistreerd";
+          date.textContent = `Status: ${request.status === "in_behandeling" ? "In behandeling" : "Nieuw"} · Aangevraagd op ${new Date(request.createdAt).toLocaleString("nl-NL")}`;
+          inProgressButton.className = "secondary-button";
+          inProgressButton.type = "button";
+          inProgressButton.textContent = "In behandeling";
+          resolveButton.className = "secondary-button";
+          resolveButton.type = "button";
+          resolveButton.textContent = "Afgehandeld";
+          const updateRequestStatus = async (status, button) => {
+            settingsError.hidden = true;
+            button.disabled = true;
+            try {
+              const resolveResponse = await fetch(`/api/consultant/password-reset-requests/${encodeURIComponent(request.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status }),
+              });
+              const result = await resolveResponse.json();
+              if (!resolveResponse.ok) throw new Error(result.error || "Aanvraag afhandelen is mislukt.");
+              await loadPasswordResetRequests();
+            } catch (error) {
+              settingsError.textContent = error.message || "Aanvraag afhandelen is mislukt.";
+              settingsError.hidden = false;
+              button.disabled = false;
+            }
+          };
+          inProgressButton.addEventListener("click", () => updateRequestStatus("in_behandeling", inProgressButton));
+          resolveButton.addEventListener("click", () => updateRequestStatus("afgehandeld", resolveButton));
+
+          details.append(title, contact, date);
+          actions.append(inProgressButton, resolveButton);
+          item.append(details, actions);
+          list.append(item);
+        }
+      } catch (error) {
+        settingsError.textContent = error.message || "Wachtwoordaanvragen konden niet worden geladen.";
+        settingsError.hidden = false;
+      }
+    }
 
     async function loadConsultantSettings() {
       try {
@@ -232,6 +303,7 @@
     });
 
     loadConsultantSettings();
+    loadPasswordResetRequests();
   </script>
 </body>
 </html>
