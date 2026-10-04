@@ -29,6 +29,10 @@ async function getAppointmentData(page) {
   return { clientSelect, clientName, dateValue, notes };
 }
 
+function formatDate(date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
 async function deleteAppointment(page, id) {
   const response = await page.request.delete(new URL(`/api/appointments/${id}`, page.url()).toString());
   expect(response.status()).toBe(204);
@@ -88,7 +92,41 @@ test("consultant can open the settings page", async ({ page }) => {
 
 test("consultant can add a new appointment", async ({ page }) => {
   const { clientSelect, clientName, dateValue, notes } = await getAppointmentData(page);
-  await page.locator("#appointment-date").fill(dateValue);
+  const dateInput = page.locator("#appointment-date");
+  const datePicker = page.locator("#appointment-date-picker");
+  const today = formatDate(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  await expect(datePicker).toHaveAttribute("min", today);
+  const [year, month, day] = dateValue.split("-");
+  await dateInput.fill(`${day}-${month}-${year}`);
+  await dateInput.evaluate((input) => input.setSelectionRange(2, 2));
+  await dateInput.press("Backspace");
+  await expect(dateInput).toHaveValue(`${day[0]}_-${month}-${year}`);
+  await dateInput.fill(`${day}-${month}-${year}`);
+  await dateInput.evaluate((input) => input.setSelectionRange(0, 0));
+  await dateInput.press("Delete");
+  await expect(dateInput).toHaveValue(`_${day[1]}-${month}-${year}`);
+  await dateInput.fill(`${day}-${month}-${year}`);
+  await dateInput.evaluate((input) => input.setSelectionRange(0, 2));
+  await dateInput.pressSequentially("11");
+  await expect(dateInput).toHaveValue(`11-${month}-${year}`);
+
+  const [yesterdayYear, yesterdayMonth, yesterdayDay] = formatDate(yesterday).split("-");
+  await dateInput.fill(`${yesterdayDay}${yesterdayMonth}${yesterdayYear}`);
+  await dateInput.blur();
+  await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
+  await expect(page.locator("#appointment-date-error")).toHaveText("Een datum in het verleden is niet toegestaan.");
+  await dateInput.fill("48012026");
+  await expect(dateInput).toHaveValue("48-01-2026");
+  await expect.poll(() => dateInput.evaluate((input) => input.validationMessage))
+    .toBe("Vul een geldige datum in als dd-mm-jjjj.");
+  await dateInput.blur();
+  await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
+  await expect(page.locator("#appointment-date-error")).toHaveText("De ingevoerde datum is ongeldig");
+  await dateInput.fill("");
+  await dateInput.pressSequentially(`${day}${month}${year}`);
+  await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
   await clientSelect.selectOption({ index: 1 });
   await page.locator("#appointment-hour").selectOption("10");
   await page.locator("#appointment-minute").selectOption("15");
@@ -112,6 +150,18 @@ test("consultant can add a new appointment", async ({ page }) => {
   } finally {
     await deleteAppointment(page, appointment.id);
   }
+});
+
+test("consultant cannot create an appointment in the past", async ({ page }) => {
+  const { clientName } = await getAppointmentData(page);
+  const pastDate = new Date();
+  pastDate.setDate(pastDate.getDate() - 1);
+  while (pastDate.getDay() === 0 || pastDate.getDay() === 6) pastDate.setDate(pastDate.getDate() - 1);
+  const response = await page.request.post(new URL("/api/appointments", page.url()).toString(), {
+    data: { date: formatDate(pastDate), client: clientName, start: "10:15", durationMinutes: 30, notes: "" },
+  });
+  expect(response.status()).toBe(400);
+  expect(await response.json()).toEqual({ error: "Afspraken in het verleden zijn niet toegestaan." });
 });
 
 test("consultant can see an appointment in the agenda", async ({ page }) => {

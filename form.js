@@ -8,6 +8,8 @@ import { getEndTime, getWeekStart, isWorkday, localDateString, parseLocalDate } 
 
 const form = document.querySelector("#appointment-form");
 const dateInput = document.querySelector("#appointment-date");
+const datePickerInput = document.querySelector("#appointment-date-picker");
+const dateErrorMessage = document.querySelector("#appointment-date-error");
 const clientInput = document.querySelector("#appointment-client");
 const locationInput = document.querySelector("#appointment-location");
 const consultantInput = document.querySelector("#appointment-consultant");
@@ -27,6 +29,131 @@ function getInitialWorkday() {
   return date;
 }
 
+function parseAppointmentDate(value) {
+  const trimmedValue = value.trim();
+  let year;
+  let month;
+  let day;
+  if (/^\d{8}$/.test(trimmedValue)) {
+    day = Number(trimmedValue.slice(0, 2));
+    month = Number(trimmedValue.slice(2, 4));
+    year = Number(trimmedValue.slice(4));
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedValue)) {
+    [year, month, day] = trimmedValue.split("-").map(Number);
+  } else {
+    const match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(trimmedValue);
+    if (!match) return null;
+    [, day, month, year] = match;
+    day = Number(day);
+    month = Number(month);
+    year = Number(year);
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function formatAppointmentDate(date) {
+  const [year, month, day] = date.split("-");
+  return `${day}-${month}-${year}`;
+}
+
+function getDateMaskSlots(value) {
+  const [day = "", month = "", year = ""] = value.split("-");
+  return [...day.padEnd(2, "_"), ...month.padEnd(2, "_"), ...year.padEnd(4, "_")]
+    .slice(0, 8)
+    .map((character) => /\d/.test(character) ? character : "_");
+}
+
+function renderDateMask(slots) {
+  return `${slots[0]}${slots[1]}-${slots[2]}${slots[3]}-${slots.slice(4).join("")}`;
+}
+
+function dateDigitIndexAt(position) {
+  return [0, 1, 3, 4, 6, 7, 8, 9].filter((digitPosition) => digitPosition < position).length;
+}
+
+function datePositionAtDigit(index) {
+  return [0, 1, 3, 4, 6, 7, 8, 9, 10][Math.min(index, 8)];
+}
+
+function setDateMask(slots, caretDigitIndex) {
+  dateInput.value = renderDateMask(slots);
+  const caretPosition = datePositionAtDigit(caretDigitIndex);
+  dateInput.setSelectionRange(caretPosition, caretPosition);
+}
+
+function maskAppointmentDateInput() {
+  const caretDigitIndex = dateDigitIndexAt(dateInput.selectionStart);
+  const rawDigits = dateInput.value.replace(/\D/g, "").slice(0, 8);
+  const slots = rawDigits.padEnd(8, "_").split("");
+  setDateMask(slots, caretDigitIndex);
+  setAppointmentDateError();
+  validateAppointmentDate(false);
+}
+
+function overwriteAppointmentDateDigits(event) {
+  const inputType = event.inputType;
+  const selectionStart = dateInput.selectionStart;
+  const selectionEnd = dateInput.selectionEnd;
+  const slots = getDateMaskSlots(dateInput.value);
+
+  if (inputType.startsWith("delete")) {
+    event.preventDefault();
+    const selectedDigits = [];
+    for (let position = selectionStart; position < selectionEnd; position += 1) {
+      const digitIndex = dateDigitIndexAt(position + 1) - 1;
+      if (datePositionAtDigit(digitIndex) === position) selectedDigits.push(digitIndex);
+    }
+
+    if (selectedDigits.length) {
+      for (const digitIndex of selectedDigits) slots[digitIndex] = "_";
+      setDateMask(slots, selectedDigits[0]);
+    } else {
+      const isBackward = inputType.includes("Backward");
+      const digitIndex = isBackward
+        ? dateDigitIndexAt(selectionStart)
+        : dateDigitIndexAt(selectionStart);
+      const targetIndex = isBackward ? digitIndex - 1 : digitIndex;
+      if (targetIndex >= 0 && targetIndex < slots.length) {
+        slots[targetIndex] = "_";
+        setDateMask(slots, targetIndex);
+      }
+    }
+    setAppointmentDateError();
+    validateAppointmentDate(false);
+    return;
+  }
+
+  if (!inputType.startsWith("insert") || !event.data || !/^\d+$/.test(event.data)) return;
+  event.preventDefault();
+
+  const selectedDigits = [];
+  for (let position = selectionStart; position < selectionEnd; position += 1) {
+    const digitIndex = dateDigitIndexAt(position + 1) - 1;
+    if (datePositionAtDigit(digitIndex) === position) selectedDigits.push(digitIndex);
+  }
+  const startIndex = selectedDigits[0] ?? dateDigitIndexAt(selectionStart);
+  for (let index = 0; index < event.data.length && startIndex + index < slots.length; index += 1) {
+    slots[startIndex + index] = event.data[index];
+  }
+  const caretDigitIndex = Math.min(8, startIndex + event.data.length);
+  setDateMask(slots, caretDigitIndex);
+  setAppointmentDateError();
+  validateAppointmentDate(false);
+}
+
+function setAppointmentDate(date) {
+  datePickerInput.value = date;
+  dateInput.value = formatAppointmentDate(date);
+  dateInput.setCustomValidity("");
+}
+
+function setAppointmentDateError(message = "") {
+  dateErrorMessage.textContent = message;
+}
+
 function resetAppointmentForm() {
   editingAppointmentId = null;
   formModeLabel.textContent = isClientRequestForm ? "Afspraak aanvragen" : "Nieuwe afspraak";
@@ -35,9 +162,10 @@ function resetAppointmentForm() {
     : '<span aria-hidden="true">+</span>Afspraak opslaan';
   cancelEditButton.hidden = true;
   dateInput.disabled = false;
+  datePickerInput.disabled = false;
   clientInput.disabled = isClientRequestForm || clientInput.options.length <= 1;
   form.reset();
-  dateInput.value = localDateString(getInitialWorkday());
+  setAppointmentDate(localDateString(getInitialWorkday()));
   clientInput.value = "";
   clientInput.selectedIndex = 0;
   startHourInput.value = "09";
@@ -45,13 +173,41 @@ function resetAppointmentForm() {
   durationInput.value = "30";
 }
 
+function validateAppointmentDate(rejectPast = true) {
+  const today = localDateString();
+  datePickerInput.min = today;
+  const date = parseAppointmentDate(dateInput.value);
+  const isPastDate = rejectPast && Boolean(date) && date < today;
+  const isInvalidDate = rejectPast && Boolean(dateInput.value) && !date;
+  if (isPastDate || isInvalidDate) {
+    setAppointmentDate(today);
+    setAppointmentDateError(
+      isPastDate
+        ? "Een datum in het verleden is niet toegestaan."
+        : "De ingevoerde datum is ongeldig",
+    );
+  }
+  const selectedDate = parseAppointmentDate(dateInput.value);
+  if (!selectedDate) {
+    dateInput.setCustomValidity(dateInput.value ? "Vul een geldige datum in als dd-mm-jjjj." : "");
+  } else if (!isWorkday(selectedDate)) {
+    dateInput.setCustomValidity("Kies een werkdag van maandag tot en met vrijdag.");
+  } else {
+    dateInput.setCustomValidity("");
+    datePickerInput.value = selectedDate;
+    dateInput.value = formatAppointmentDate(selectedDate);
+  }
+  return isPastDate || isInvalidDate;
+}
+
 function startEditingAppointment(appointment) {
   editingAppointmentId = appointment.id;
   formModeLabel.textContent = "Wijzigen afspraak";
   formSubmitButton.innerHTML = '<span aria-hidden="true">&#10003;</span>Wijziging opslaan';
   cancelEditButton.hidden = false;
-  dateInput.value = appointment.date;
+  setAppointmentDate(appointment.date);
   dateInput.disabled = true;
+  datePickerInput.disabled = true;
   clientInput.value = appointment.client;
   clientInput.disabled = true;
   const [hours, minutes] = appointment.start.split(":");
@@ -123,15 +279,25 @@ export function initForm() {
   }
   startHourInput.value = "09";
   startMinuteInput.value = "00";
-  dateInput.value = localDateString(getInitialWorkday());
-  dateInput.addEventListener("input", () => {
-    dateInput.setCustomValidity(isWorkday(dateInput.value) ? "" : "Kies een werkdag van maandag tot en met vrijdag.");
+  setAppointmentDate(localDateString(getInitialWorkday()));
+  datePickerInput.min = localDateString();
+  dateInput.addEventListener("focus", validateAppointmentDate);
+  dateInput.addEventListener("click", validateAppointmentDate);
+  dateInput.addEventListener("beforeinput", overwriteAppointmentDateDigits);
+  dateInput.addEventListener("input", maskAppointmentDateInput);
+  dateInput.addEventListener("blur", validateAppointmentDate);
+  dateInput.addEventListener("change", validateAppointmentDate);
+  datePickerInput.addEventListener("change", () => {
+    if (datePickerInput.value) dateInput.value = formatAppointmentDate(datePickerInput.value);
+    setAppointmentDateError();
+    validateAppointmentDate();
   });
   durationInput.addEventListener("input", () => durationInput.setCustomValidity(""));
   cancelEditButton.addEventListener("click", resetAppointmentForm);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (validateAppointmentDate()) return;
     if (!form.reportValidity()) return;
     const formData = new FormData(form);
     const start = `${formData.get("startHour")}:${formData.get("startMinute")}`;

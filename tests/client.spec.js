@@ -17,6 +17,10 @@ async function deleteAppointment(page, id) {
   expect(response.status()).toBe(204);
 }
 
+function formatDate(date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
 test.beforeEach(async ({ page }) => {
   await loginAsConsultant(page);
 });
@@ -60,7 +64,20 @@ test("client can request an appointment with a consultant at a standard location
     const reason = `Playwright request ${Date.now()}`;
 
     await expect(clientPage.locator("#appointment-location")).toBeVisible();
-    await clientPage.locator("#appointment-date").fill(dateValue);
+    const dateInput = clientPage.locator("#appointment-date");
+    const datePicker = clientPage.locator("#appointment-date-picker");
+    const today = formatDate(new Date());
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    await expect(datePicker).toHaveAttribute("min", today);
+    const [yesterdayYear, yesterdayMonth, yesterdayDay] = formatDate(yesterday).split("-");
+    await dateInput.fill(`${yesterdayDay}${yesterdayMonth}${yesterdayYear}`);
+    await dateInput.blur();
+    await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
+    await expect(clientPage.locator("#appointment-date-error")).toHaveText("Een datum in het verleden is niet toegestaan.");
+    const [year, month, day] = dateValue.split("-");
+    await dateInput.fill(`${day}${month}${year}`);
+    await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
     await clientPage.locator("#appointment-hour").selectOption("10");
     await clientPage.locator("#appointment-minute").selectOption("00");
     await clientPage.locator("#appointment-location").selectOption(String(location.id));

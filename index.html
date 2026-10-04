@@ -125,7 +125,14 @@
         <form id="appointment-form">
           <label class="field" for="appointment-date">
             <span>Datum</span>
-            <input id="appointment-date" name="date" type="date" required>
+            <span class="appointment-date-control">
+              <input id="appointment-date" type="text" inputmode="numeric" autocomplete="off" placeholder="dd-mm-jjjj" aria-describedby="appointment-date-hint" required>
+              <span class="appointment-date-picker">
+                <input id="appointment-date-picker" name="date" type="date" aria-label="Kies datum via kalender">
+                <span aria-hidden="true">▦</span>
+              </span>
+            </span>
+            <span class="visually-hidden" id="appointment-date-hint">Vul de datum in als dd-mm-jjjj of typ acht cijfers, bijvoorbeeld 08122026.</span>
           </label>
 
           <label class="field" id="appointment-client-field" for="appointment-client">
@@ -177,6 +184,7 @@
             <textarea id="appointment-notes" name="notes" rows="3" maxlength="200" placeholder="Onderwerp of extra informatie"></textarea>
           </label>
 
+          <p class="appointment-date-error" id="appointment-date-error" role="status" aria-live="polite"></p>
           <button class="primary-button" id="form-submit-button" type="submit">
             <span aria-hidden="true">+</span>
             Afspraak opslaan
