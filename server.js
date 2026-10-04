@@ -106,7 +106,27 @@ app.post("/api/password-reset-requests", async (request, response, next) => {
     return response.status(400).json({ error: "Vul een geldige gebruikersnaam in." });
   }
 
+  const database = await pool.connect();
   try {
+    await database.query("BEGIN");
+    await database.query("SELECT pg_advisory_xact_lock(837421, hashtext(LOWER($1)))", [username]);
+    const recentRequest = await database.query(`
+      SELECT id
+      FROM password_reset_requests
+      WHERE LOWER(client_username) = LOWER($1)
+        AND created_at > NOW() - INTERVAL '5 minutes'
+      LIMIT 1
+    `, [username]);
+    if (recentRequest.rowCount > 0) {
+      await database.query("COMMIT");
+      return response.json({ alreadySubmitted: true, message: "Aanvraag reeds ingediend" });
+    }
+
+    await database.query(
+      "DELETE FROM password_reset_requests WHERE LOWER(client_username) = LOWER($1)",
+      [username],
+    );
+
     let trackingCode;
     let inserted = false;
     for (let attempt = 0; attempt < 5 && !inserted; attempt += 1) {
@@ -115,7 +135,7 @@ app.post("/api/password-reset-requests", async (request, response, next) => {
         () => trackingCodeAlphabet[randomInt(trackingCodeAlphabet.length)],
       ).join("");
       const trackingCodeHash = createHash("sha256").update(trackingCode).digest("hex");
-      const result = await pool.query(`
+      const result = await database.query(`
         INSERT INTO password_reset_requests (id, client_username, tracking_token_hash)
         VALUES ($1, $2, $3)
         ON CONFLICT (tracking_token_hash) WHERE tracking_token_hash IS NOT NULL DO NOTHING
@@ -124,12 +144,16 @@ app.post("/api/password-reset-requests", async (request, response, next) => {
       inserted = result.rowCount > 0;
     }
     if (!inserted) throw new Error("Er kon geen unieke statuscode worden aangemaakt.");
+    await database.query("COMMIT");
     response.json({
       message: "Als deze gebruikersnaam bij een cliëntaccount hoort, is de aanvraag bij de beheerder ingediend.",
       trackingCode,
     });
   } catch (error) {
+    await database.query("ROLLBACK");
     next(error);
+  } finally {
+    database.release();
   }
 });
 
@@ -238,7 +262,7 @@ app.post("/api/login", async (request, response, next) => {
   const password = typeof request.body?.password === "string" ? request.body.password : "";
   try {
     const consultantResult = await pool.query(
-      "SELECT username, voornaam, tussenvoegsel, achternaam, password FROM consultant WHERE username = $1 LIMIT 1",
+      "SELECT username, voornaam, tussenvoegsel, achternaam, password, functie FROM consultant WHERE username = $1 LIMIT 1",
       [username],
     );
     let account = consultantResult.rows[0];
@@ -273,7 +297,10 @@ app.post("/api/login", async (request, response, next) => {
 
     const token = randomUUID();
     const mustChangePassword = role === "client" && password === defaultClientPassword;
-    sessions.set(token, { username: account.username, role, name, clientName: role === "client" ? name : null, mustChangePassword, createdAt: Date.now() });
+    const isBeheerder = role === "consultant"
+      && typeof account.functie === "string"
+      && account.functie.trim().toLocaleLowerCase("nl-NL") === "beheerder";
+    sessions.set(token, { username: account.username, role, isBeheerder, name, clientName: role === "client" ? name : null, mustChangePassword, createdAt: Date.now() });
     response.setHeader("Set-Cookie", `${sessionCookie}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
     response.json({ name, mustChangePassword });
   } catch (error) {
@@ -487,16 +514,26 @@ app.get("/api/consultant/password-reset-requests", async (request, response, nex
     const result = await pool.query(`
       SELECT request.id,
              request.client_username AS username,
-             CONCAT_WS(' ', client.voornaam, NULLIF(client.tussenvoegsel, ''), client.achternaam) AS name,
-             COALESCE(client.telefoonnummer, '') AS telefoonnummer,
-             (client.username IS NOT NULL) AS "accountExists",
+             COALESCE(
+               NULLIF(CONCAT_WS(' ', client.voornaam, NULLIF(client.tussenvoegsel, ''), client.achternaam), ''),
+               NULLIF(CONCAT_WS(' ', consultant.voornaam, NULLIF(consultant.tussenvoegsel, ''), consultant.achternaam), '')
+             ) AS name,
+             COALESCE(client.telefoonnummer, consultant.telefoonnummer, '') AS telefoonnummer,
+             CASE WHEN $1::boolean THEN
+               CASE WHEN consultant.username IS NOT NULL THEN 'consultant' ELSE 'client' END
+             END AS "accountType",
              request.status,
              request.created_at AS "createdAt"
       FROM password_reset_requests AS request
       LEFT JOIN klanten AS client ON LOWER(client.username) = LOWER(request.client_username)
+      LEFT JOIN consultant ON LOWER(consultant.username) = LOWER(request.client_username)
       WHERE request.status <> 'afgehandeld'
+        AND (
+          ($1::boolean AND consultant.username IS NOT NULL)
+          OR (client.username IS NOT NULL AND consultant.username IS NULL)
+        )
       ORDER BY request.created_at
-    `);
+    `, [Boolean(session.isBeheerder)]);
     response.json(result.rows);
   } catch (error) {
     next(error);

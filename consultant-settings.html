@@ -167,10 +167,11 @@
           const inProgressButton = document.createElement("button");
           const resolveButton = document.createElement("button");
 
-          title.textContent = `${request.name || request.username} (${request.username})`;
-          contact.textContent = request.accountExists
-            ? request.telefoonnummer || "Geen telefoonnummer geregistreerd"
-            : "Geen cliëntaccount gevonden met deze gebruikersnaam";
+          const accountType = request.accountType === "client"
+            ? "Cliënt"
+            : request.accountType === "consultant" ? "Consultant" : "";
+          title.textContent = `${request.name || request.username} (${request.username})${accountType ? ` · ${accountType}` : ""}`;
+          contact.textContent = request.telefoonnummer || "Geen telefoonnummer geregistreerd";
           date.textContent = `Status: ${request.status === "in_behandeling" ? "In behandeling" : "Nieuw"} · Aangevraagd op ${new Date(request.createdAt).toLocaleString("nl-NL")}`;
           inProgressButton.className = "secondary-button";
           inProgressButton.type = "button";

@@ -941,6 +941,10 @@ textarea::placeholder {
   transition: background 140ms ease, transform 140ms ease;
 }
 
+.primary-button[hidden] {
+  display: none;
+}
+
 .primary-button span {
   font-size: 20px;
   font-weight: 400;
