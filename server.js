@@ -677,6 +677,10 @@ app.post("/api/appointments", async (request, response, next) => {
   const durationMinutes = clientRequest ? 30 : request.body?.durationMinutes;
   const validationError = validateAppointment({ ...request.body, client, durationMinutes });
   if (validationError) return response.status(400).json({ error: validationError });
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
+  if (request.body.date < today) {
+    return response.status(400).json({ error: "Afspraken in het verleden zijn niet toegestaan." });
+  }
   if (clientRequest && (typeof request.body?.notes !== "string" || !request.body.notes.trim())) {
     return response.status(400).json({ error: "Vul de reden voor het gesprek in." });
   }
