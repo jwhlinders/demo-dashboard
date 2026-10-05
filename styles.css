@@ -34,6 +34,7 @@ body {
   background: radial-gradient(circle at top right, #e8f1eb 0, var(--canvas) 42%, #fff8e8 100%);
 }
 
+
 .login-shell {
   width: min(100%, 420px);
 }
