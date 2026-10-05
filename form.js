@@ -209,6 +209,7 @@ function overwriteAppointmentDateDigits(event) {
   validateAppointmentDate(false);
 }
 
+
 function setAppointmentDate(date) {
   datePickerValue.value = date;
   dateInput.value = formatAppointmentDate(date);
