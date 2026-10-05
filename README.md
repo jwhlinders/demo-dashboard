@@ -21,6 +21,6 @@ Installeer de Playwright-browser eenmalig met `npx playwright install chromium`.
 
 ## GitLab CI
 
-De `.gitlab-ci.yml`-pipeline start een tijdelijke PostgreSQL-service, initialiseert die met `tests/fixtures/ci-schema.sql` en voert de Playwright-tests uit. De pipeline installeert hiervoor Chromium en draait de tests sequentieel tegen een lege database. Playwright-resultaten worden als GitLab-jobartefact bewaard.
+Bij iedere push naar `main` start de `.gitlab-ci.yml`-pipeline een tijdelijke PostgreSQL-service, initialiseert die met `tests/fixtures/ci-schema.sql` en voert de Playwright-tests uit. De pipeline installeert hiervoor Chromium en draait de tests sequentieel tegen een lege database. Pushes naar andere branches starten geen pipeline. Playwright-resultaten worden als GitLab-jobartefact bewaard.
 
 Stel de E2E-variabelen in op de accountgegevens uit dit fixture: `E2E_CONSULTANT_USERNAME=ci-consultant`, `E2E_CONSULTANT_PASSWORD=CIConsultant2026!`, `E2E_CLIENT_USERNAME=ci-client` en `E2E_CLIENT_PASSWORD=CIClient2026!`. Deze vaste gegevens zijn uitsluitend voor de wegwerpdatabase van CI; gebruik ze niet buiten tests.

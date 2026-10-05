@@ -1,5 +1,10 @@
 image: node:22-bookworm
 
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - when: never
+
 services:
   - name: postgres:17-alpine
     alias: postgres
