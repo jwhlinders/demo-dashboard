@@ -429,6 +429,7 @@ app.get("/api/consultant", async (request, response, next) => {
       SELECT TRIM(consultant.voornaam) AS first_name,
              TRIM(COALESCE(tussenvoegsel, '')) AS prefix,
              TRIM(consultant.achternaam) AS last_name,
+             consultant.werkdagen,
              (
                SELECT locatie.naam
                FROM locaties AS locatie
@@ -445,7 +446,7 @@ app.get("/api/consultant", async (request, response, next) => {
     const name = [consultant.first_name, consultant.prefix, consultant.last_name]
       .filter(Boolean)
       .join(" ");
-    response.json({ name: name || "Agenda", role: session.role, locationName: consultant.location_name });
+    response.json({ name: name || "Agenda", role: session.role, locationName: consultant.location_name, werkdagen: consultant.werkdagen });
   } catch (error) {
     next(error);
   }
@@ -596,6 +597,7 @@ app.get("/api/appointment-options", async (request, response, next) => {
     const result = await pool.query(`
       SELECT consultant.username,
              TRIM(CONCAT_WS(' ', NULLIF(TRIM(consultant.voornaam), ''), NULLIF(TRIM(consultant.tussenvoegsel), ''), NULLIF(TRIM(consultant.achternaam), ''))) AS name,
+             consultant.werkdagen,
              locatie.idlocatie AS location_id,
              locatie.naam AS location_name
       FROM consultant
@@ -607,6 +609,7 @@ app.get("/api/appointment-options", async (request, response, next) => {
       username: row.username,
       name: row.name || row.username,
       locationId: row.location_id,
+      werkdagen: row.werkdagen,
     }])).values()];
     response.json({ locations, consultants });
   } catch (error) {
@@ -627,7 +630,6 @@ function validateAppointment(body) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(dateValue.valueOf()) || dateValue.toISOString().slice(0, 10) !== date) {
     return "Kies een geldige datum.";
   }
-  if ([0, 6].includes(dateValue.getUTCDay())) return "Afspraken zijn alleen op werkdagen toegestaan.";
   if (!client || client.length > 80) return "Vul een cliëntnaam van maximaal 80 tekens in.";
   if (!startMatch || Number(startMatch[1]) > 23 || Number(startMatch[2]) > 59) return "Kies een geldige starttijd.";
   if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 720 || startMinutes + durationMinutes >= 1440) {
@@ -715,6 +717,21 @@ app.post("/api/appointments", async (request, response, next) => {
         return response.status(400).json({ error: "Kies een cliënt met een uniek account uit de lijst." });
       }
       clientUsername = matchingClient.rows[0].username;
+    }
+
+    const consultantAvailability = await pool.query(
+      "SELECT werkdagen FROM consultant WHERE username = $1 LIMIT 1",
+      [consultantUsername],
+    );
+    if (consultantAvailability.rowCount === 0) {
+      return response.status(404).json({ error: "Consultant niet gevonden." });
+    }
+    const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+    const weekday = weekdayNames[dateValue.getUTCDay()];
+    const werkdagen = String(consultantAvailability.rows[0].werkdagen || "");
+    if (!werkdagen.toLocaleLowerCase("nl-NL").includes(weekday.toLocaleLowerCase("nl-NL"))) {
+      const [year, month, day] = date.split("-");
+      return response.status(400).json({ error: `consultant niet aanwezig op ${day}-${month}-${year}` });
     }
 
     const result = await pool.query(`

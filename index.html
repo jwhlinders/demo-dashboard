@@ -128,9 +128,25 @@
             <span class="appointment-date-control">
               <input id="appointment-date" type="text" inputmode="numeric" autocomplete="off" placeholder="dd-mm-jjjj" aria-describedby="appointment-date-hint" required>
               <span class="appointment-date-picker">
-                <input id="appointment-date-picker" name="date" type="date" aria-label="Kies datum via kalender">
-                <span aria-hidden="true">▦</span>
+                <button id="appointment-date-picker" type="button" aria-label="Kies datum via kalender" aria-haspopup="dialog" aria-expanded="false" aria-controls="appointment-date-calendar">▦</button>
               </span>
+              <input id="appointment-date-picker-value" name="date" type="hidden">
+              <div class="appointment-calendar" id="appointment-date-calendar" role="dialog" aria-label="Kies een afspraakdatum" hidden>
+                <div class="appointment-calendar-heading">
+                  <button type="button" data-calendar-previous aria-label="Vorige maand">&lsaquo;</button>
+                  <strong data-calendar-month></strong>
+                  <button type="button" data-calendar-next aria-label="Volgende maand">&rsaquo;</button>
+                </div>
+                <div class="appointment-calendar-grid" role="grid" aria-label="Datums">
+                  <span role="columnheader">Ma</span>
+                  <span role="columnheader">Di</span>
+                  <span role="columnheader">Wo</span>
+                  <span role="columnheader">Do</span>
+                  <span role="columnheader">Vr</span>
+                  <span role="columnheader">Za</span>
+                  <span role="columnheader">Zo</span>
+                </div>
+              </div>
             </span>
             <span class="visually-hidden" id="appointment-date-hint">Vul de datum in als dd-mm-jjjj of typ acht cijfers, bijvoorbeeld 08122026.</span>
           </label>

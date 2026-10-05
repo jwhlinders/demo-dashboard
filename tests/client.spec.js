@@ -57,19 +57,36 @@ test("client can request an appointment with a consultant at a standard location
     const location = options.locations.find((item) => String(item.id) === String(consultant.locationId));
     expect(location).toBeTruthy();
 
+    await expect(clientPage.locator("#appointment-location")).toBeVisible();
+    await clientPage.locator("#appointment-location").selectOption(String(location.id));
+    await clientPage.locator("#appointment-consultant").selectOption(consultant.username);
+    const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+    const consultantWorkdays = String(consultant.werkdagen || "");
+    test.skip(!consultantWorkdays, "The selected consultant has no configured workdays.");
     const appointmentDate = new Date();
     appointmentDate.setDate(appointmentDate.getDate() + 1);
-    while (appointmentDate.getDay() === 0 || appointmentDate.getDay() === 6) appointmentDate.setDate(appointmentDate.getDate() + 1);
+    while (!consultantWorkdays.includes(weekdayNames[appointmentDate.getDay()])) appointmentDate.setDate(appointmentDate.getDate() + 1);
     const dateValue = [appointmentDate.getFullYear(), String(appointmentDate.getMonth() + 1).padStart(2, "0"), String(appointmentDate.getDate()).padStart(2, "0")].join("-");
     const reason = `Playwright request ${Date.now()}`;
 
-    await expect(clientPage.locator("#appointment-location")).toBeVisible();
     const dateInput = clientPage.locator("#appointment-date");
     const datePicker = clientPage.locator("#appointment-date-picker");
-    const today = formatDate(new Date());
+    await datePicker.click();
+    const unavailableDate = new Date();
+    unavailableDate.setDate(unavailableDate.getDate() + 1);
+    while (consultantWorkdays.includes(weekdayNames[unavailableDate.getDay()])) unavailableDate.setDate(unavailableDate.getDate() + 1);
+    const unavailableDateValue = formatDate(unavailableDate);
+    for (let month = 0; month < 2 && await clientPage.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`).count() === 0; month += 1) {
+      await clientPage.locator("[data-calendar-next]").click();
+    }
+    await expect(clientPage.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`)).toBeDisabled();
+    const [unavailableYear, unavailableMonth, unavailableDay] = unavailableDateValue.split("-");
+    await dateInput.fill(`${unavailableDay}${unavailableMonth}${unavailableYear}`);
+    await dateInput.blur();
+    await expect(clientPage.locator("#appointment-date-error")).toHaveText(`consultant niet aanwezig op ${unavailableDay}-${unavailableMonth}-${unavailableYear}`);
+
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    await expect(datePicker).toHaveAttribute("min", today);
     const [yesterdayYear, yesterdayMonth, yesterdayDay] = formatDate(yesterday).split("-");
     await dateInput.fill(`${yesterdayDay}${yesterdayMonth}${yesterdayYear}`);
     await dateInput.blur();
@@ -80,8 +97,6 @@ test("client can request an appointment with a consultant at a standard location
     await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
     await clientPage.locator("#appointment-hour").selectOption("10");
     await clientPage.locator("#appointment-minute").selectOption("00");
-    await clientPage.locator("#appointment-location").selectOption(String(location.id));
-    await clientPage.locator("#appointment-consultant").selectOption(consultant.username);
     await clientPage.locator("#appointment-notes").fill(reason);
 
     const createResponse = clientPage.waitForResponse((response) =>

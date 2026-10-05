@@ -14,7 +14,7 @@ import { initProfile } from "./agenda-profile.js";
 
 const calendarGrid = document.querySelector("#calendar-grid");
 const clientFilter = document.querySelector("#agenda-client-filter");
-const { startEditingAppointment, setClientRequestMode } = initForm();
+const { startEditingAppointment, setClientRequestMode, setConsultantWorkdays } = initForm();
 
 async function loadAppointments() {
   try {
@@ -35,6 +35,7 @@ async function loadAppointments() {
     document.querySelector(".summary").classList.toggle("is-client", isClientSession);
     document.querySelector("#requested-summary").hidden = isClientSession;
     document.querySelector("#consultant-name").textContent = consultant.name;
+    if (consultant.role !== "client") setConsultantWorkdays(consultant.werkdagen);
     const locationLabel = document.querySelector("#consultant-location");
     locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
     locationLabel.hidden = !consultant.locationName;

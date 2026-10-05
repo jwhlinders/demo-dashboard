@@ -1248,6 +1248,7 @@ td.hours-cell {
 }
 
 .appointment-date-control {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 30px;
   gap: 5px;
@@ -1255,7 +1256,6 @@ td.hours-cell {
 }
 
 .appointment-date-picker {
-  position: relative;
   display: grid;
   min-height: 24px;
   place-items: center;
@@ -1267,20 +1267,90 @@ td.hours-cell {
   line-height: 1;
 }
 
-.appointment-date-picker input {
-  position: absolute;
-  inset: 0;
+.appointment-date-picker button {
   width: 100%;
   height: 100%;
-  min-height: 0;
   padding: 0;
-  opacity: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
   cursor: pointer;
 }
 
 .appointment-date-picker:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.appointment-calendar {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  width: 252px;
+  padding: 8px;
+  border: 1px solid #d9dfd9;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(20 35 25 / 16%);
+}
+
+.appointment-calendar[hidden] {
+  display: none;
+}
+
+.appointment-calendar-heading {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  margin-bottom: 6px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.appointment-calendar-heading button,
+.appointment-calendar-grid button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+}
+
+.appointment-calendar-heading button:hover,
+.appointment-calendar-grid button:not(:disabled):hover {
+  background: #edf2ec;
+}
+
+.appointment-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  text-align: center;
+}
+
+.appointment-calendar-grid > span {
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.appointment-calendar-grid button {
+  padding: 0;
+}
+
+.appointment-calendar-grid button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.appointment-calendar-grid button:disabled {
+  color: #aeb6ae;
+  cursor: not-allowed;
+  text-decoration: line-through;
 }
 
 #appointment-form .time-fields {

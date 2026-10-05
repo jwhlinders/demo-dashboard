@@ -17,16 +17,21 @@ async function getAppointmentData(page) {
   await expect(clientSelect).toBeEnabled();
   await expect(clientSelect.locator("option").nth(1)).toBeAttached();
   const clientName = (await clientSelect.locator("option").nth(1).textContent()).trim();
+  const consultantResponse = await page.request.get(new URL("/api/consultant", page.url()).toString());
+  expect(consultantResponse.ok()).toBeTruthy();
+  const consultant = await consultantResponse.json();
+  test.skip(!consultant.werkdagen, "The consultant has no configured workdays.");
 
   const appointmentDate = new Date();
   appointmentDate.setDate(appointmentDate.getDate() + 1);
-  while (appointmentDate.getDay() === 0 || appointmentDate.getDay() === 6) {
+  const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+  while (!String(consultant.werkdagen || "").includes(weekdayNames[appointmentDate.getDay()])) {
     appointmentDate.setDate(appointmentDate.getDate() + 1);
   }
   const dateValue = [appointmentDate.getFullYear(), String(appointmentDate.getMonth() + 1).padStart(2, "0"), String(appointmentDate.getDate()).padStart(2, "0")].join("-");
   const notes = `Playwright appointment ${Date.now()}`;
 
-  return { clientSelect, clientName, dateValue, notes };
+  return { clientSelect, clientName, dateValue, notes, werkdagen: consultant.werkdagen };
 }
 
 function formatDate(date) {
@@ -90,14 +95,52 @@ test("consultant can open the settings page", async ({ page }) => {
   }
 });
 
-test("consultant can add a new appointment", async ({ page }) => {
+test("consultant can add an appointment on a workday", async ({ page }) => {
   const { clientSelect, clientName, dateValue, notes } = await getAppointmentData(page);
+  const datePicker = page.locator("#appointment-date-picker");
+  await datePicker.click();
+  for (let month = 0; month < 2 && await page.locator(`#appointment-date-calendar [data-date="${dateValue}"]`).count() === 0; month += 1) {
+    await page.locator("[data-calendar-next]").click();
+  }
+  const workdayButton = page.locator(`#appointment-date-calendar [data-date="${dateValue}"]`);
+  await expect(workdayButton).toBeEnabled();
+  await workdayButton.click();
+
+  const dateInput = page.locator("#appointment-date");
+  const [year, month, day] = dateValue.split("-");
+  await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
+  await clientSelect.selectOption({ index: 1 });
+  await page.locator("#appointment-hour").selectOption("10");
+  await page.locator("#appointment-minute").selectOption("15");
+  await page.locator("#appointment-duration").fill("30");
+  await page.locator("#appointment-notes").fill(notes);
+
+  const createResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/appointments") && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Afspraak opslaan" }).click();
+  const response = await createResponse;
+  expect(response.status()).toBe(201);
+  const appointment = await response.json();
+
+  try {
+    expect(appointment.client).toBe(clientName);
+    expect(appointment.clientUsername).toBeTruthy();
+    expect(appointment.date).toBe(dateValue);
+    expect(appointment.start).toBe("10:15");
+    expect(appointment.notes).toBe(notes);
+  } finally {
+    await deleteAppointment(page, appointment.id);
+  }
+});
+
+test("consultant sees an error for a past date or a non-workday", async ({ page }) => {
+  const { clientName, dateValue, werkdagen } = await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
   const datePicker = page.locator("#appointment-date-picker");
-  const today = formatDate(new Date());
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  await expect(datePicker).toHaveAttribute("min", today);
+
   const [year, month, day] = dateValue.split("-");
   await dateInput.fill(`${day}-${month}-${year}`);
   await dateInput.evaluate((input) => input.setSelectionRange(2, 2));
@@ -124,32 +167,29 @@ test("consultant can add a new appointment", async ({ page }) => {
   await dateInput.blur();
   await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
   await expect(page.locator("#appointment-date-error")).toHaveText("De ingevoerde datum is ongeldig");
-  await dateInput.fill("");
-  await dateInput.pressSequentially(`${day}${month}${year}`);
-  await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
-  await clientSelect.selectOption({ index: 1 });
-  await page.locator("#appointment-hour").selectOption("10");
-  await page.locator("#appointment-minute").selectOption("15");
-  await page.locator("#appointment-duration").fill("30");
-  await page.locator("#appointment-notes").fill(notes);
 
-  const createResponse = page.waitForResponse((response) =>
-    response.url().endsWith("/api/appointments") && response.request().method() === "POST",
-  );
-  await page.getByRole("button", { name: "Afspraak opslaan" }).click();
-  const response = await createResponse;
-  expect(response.status()).toBe(201);
-  const appointment = await response.json();
-
-  try {
-    expect(appointment.client).toBe(clientName);
-    expect(appointment.clientUsername).toBeTruthy();
-    expect(appointment.date).toBe(dateValue);
-    expect(appointment.start).toBe("10:15");
-    expect(appointment.notes).toBe(notes);
-  } finally {
-    await deleteAppointment(page, appointment.id);
+  const unavailableDate = new Date();
+  unavailableDate.setDate(unavailableDate.getDate() + 1);
+  const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+  while (werkdagen.includes(weekdayNames[unavailableDate.getDay()])) unavailableDate.setDate(unavailableDate.getDate() + 1);
+  const unavailableDateValue = formatDate(unavailableDate);
+  await datePicker.click();
+  for (let monthIndex = 0; monthIndex < 2 && await page.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`).count() === 0; monthIndex += 1) {
+    await page.locator("[data-calendar-next]").click();
   }
+  await expect(page.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`)).toBeDisabled();
+
+  const [unavailableYear, unavailableMonth, unavailableDay] = unavailableDateValue.split("-");
+  const unavailableResponse = await page.request.post(new URL("/api/appointments", page.url()).toString(), {
+    data: { date: unavailableDateValue, client: clientName, start: "10:15", durationMinutes: 30, notes: "" },
+  });
+  expect(unavailableResponse.status()).toBe(400);
+  expect(await unavailableResponse.json()).toEqual({
+    error: `consultant niet aanwezig op ${unavailableDay}-${unavailableMonth}-${unavailableYear}`,
+  });
+  await dateInput.fill(`${unavailableDay}${unavailableMonth}${unavailableYear}`);
+  await dateInput.blur();
+  await expect(page.locator("#appointment-date-error")).toHaveText(`consultant niet aanwezig op ${unavailableDay}-${unavailableMonth}-${unavailableYear}`);
 });
 
 test("consultant cannot create an appointment in the past", async ({ page }) => {
