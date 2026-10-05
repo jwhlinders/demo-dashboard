@@ -1350,7 +1350,6 @@ td.hours-cell {
 .appointment-calendar-grid button:disabled {
   color: #aeb6ae;
   cursor: not-allowed;
-  text-decoration: line-through;
 }
 
 #appointment-form .time-fields {
