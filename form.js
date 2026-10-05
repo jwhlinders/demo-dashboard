@@ -9,6 +9,10 @@ import { getEndTime, getWeekStart, isWorkday, localDateString, parseLocalDate } 
 const form = document.querySelector("#appointment-form");
 const dateInput = document.querySelector("#appointment-date");
 const datePickerInput = document.querySelector("#appointment-date-picker");
+const datePickerValue = document.querySelector("#appointment-date-picker-value");
+const dateCalendar = document.querySelector("#appointment-date-calendar");
+const dateCalendarGrid = dateCalendar.querySelector(".appointment-calendar-grid");
+const dateCalendarMonthLabel = dateCalendar.querySelector("[data-calendar-month]");
 const dateErrorMessage = document.querySelector("#appointment-date-error");
 const clientInput = document.querySelector("#appointment-client");
 const locationInput = document.querySelector("#appointment-location");
@@ -21,12 +25,72 @@ const formSubmitButton = document.querySelector("#form-submit-button");
 const cancelEditButton = document.querySelector("#cancel-edit-button");
 let editingAppointmentId = null;
 let isClientRequestForm = false;
+let consultantWorkdays = null;
+let consultants = [];
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
 function getInitialWorkday() {
   const date = new Date();
-  if (date.getDay() === 6) date.setDate(date.getDate() + 2);
-  if (date.getDay() === 0) date.setDate(date.getDate() + 1);
+  for (let offset = 0; offset < 7 && !isConsultantWorkday(localDateString(date)); offset += 1) {
+    date.setDate(date.getDate() + 1);
+  }
   return date;
+}
+
+function getSelectedConsultantWorkdays() {
+  if (isClientRequestForm) {
+    const consultant = consultants.find((item) => item.username === consultantInput.value);
+    return consultant ? String(consultant.werkdagen || "") : null;
+  }
+  return consultantWorkdays;
+}
+
+function isConsultantWorkday(date) {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  const workdays = getSelectedConsultantWorkdays();
+  if (workdays === null) return isWorkday(date);
+  const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+  return workdays.toLocaleLowerCase("nl-NL").includes(weekdayNames[day].toLocaleLowerCase("nl-NL"));
+}
+
+function renderDateCalendar() {
+  dateCalendarMonthLabel.textContent = new Intl.DateTimeFormat("nl-NL", {
+    month: "long",
+    year: "numeric",
+  }).format(calendarMonth);
+  dateCalendarGrid.querySelectorAll("[data-date], [data-calendar-empty]").forEach((element) => element.remove());
+
+  const firstWeekday = (calendarMonth.getDay() + 6) % 7;
+  for (let index = 0; index < firstWeekday; index += 1) {
+    const emptyCell = document.createElement("span");
+    emptyCell.dataset.calendarEmpty = "";
+    emptyCell.setAttribute("role", "gridcell");
+    dateCalendarGrid.append(emptyCell);
+  }
+
+  const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
+  const today = localDateString();
+  const selectedDate = parseAppointmentDate(dateInput.value);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = localDateString(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day));
+    const dateButton = document.createElement("button");
+    dateButton.type = "button";
+    dateButton.dataset.date = date;
+    dateButton.textContent = String(day);
+    dateButton.setAttribute("aria-label", new Intl.DateTimeFormat("nl-NL", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(`${date}T00:00:00`)));
+    dateButton.disabled = date < today || !isConsultantWorkday(date);
+    if (date === selectedDate) dateButton.setAttribute("aria-pressed", "true");
+    dateCalendarGrid.append(dateButton);
+  }
+}
+
+function closeDateCalendar() {
+  dateCalendar.hidden = true;
+  datePickerInput.setAttribute("aria-expanded", "false");
 }
 
 function parseAppointmentDate(value) {
@@ -85,6 +149,7 @@ function setDateMask(slots, caretDigitIndex) {
 }
 
 function maskAppointmentDateInput() {
+  closeDateCalendar();
   const caretDigitIndex = dateDigitIndexAt(dateInput.selectionStart);
   const rawDigits = dateInput.value.replace(/\D/g, "").slice(0, 8);
   const slots = rawDigits.padEnd(8, "_").split("");
@@ -145,9 +210,10 @@ function overwriteAppointmentDateDigits(event) {
 }
 
 function setAppointmentDate(date) {
-  datePickerInput.value = date;
+  datePickerValue.value = date;
   dateInput.value = formatAppointmentDate(date);
   dateInput.setCustomValidity("");
+  renderDateCalendar();
 }
 
 function setAppointmentDateError(message = "") {
@@ -175,28 +241,29 @@ function resetAppointmentForm() {
 
 function validateAppointmentDate(rejectPast = true) {
   const today = localDateString();
-  datePickerInput.min = today;
   const date = parseAppointmentDate(dateInput.value);
   const isPastDate = rejectPast && Boolean(date) && date < today;
   const isInvalidDate = rejectPast && Boolean(dateInput.value) && !date;
+  let visibleError = "";
   if (isPastDate || isInvalidDate) {
     setAppointmentDate(today);
-    setAppointmentDateError(
-      isPastDate
-        ? "Een datum in het verleden is niet toegestaan."
-        : "De ingevoerde datum is ongeldig",
-    );
+    visibleError = isPastDate ? "Een datum in het verleden is niet toegestaan." : "De ingevoerde datum is ongeldig";
   }
   const selectedDate = parseAppointmentDate(dateInput.value);
   if (!selectedDate) {
     dateInput.setCustomValidity(dateInput.value ? "Vul een geldige datum in als dd-mm-jjjj." : "");
-  } else if (!isWorkday(selectedDate)) {
-    dateInput.setCustomValidity("Kies een werkdag van maandag tot en met vrijdag.");
+    datePickerValue.value = "";
+  } else if (!isConsultantWorkday(selectedDate)) {
+    if (!visibleError) visibleError = `consultant niet aanwezig op ${formatAppointmentDate(selectedDate)}`;
+    dateInput.setCustomValidity(visibleError);
+    datePickerValue.value = selectedDate;
   } else {
     dateInput.setCustomValidity("");
-    datePickerInput.value = selectedDate;
+    datePickerValue.value = selectedDate;
     dateInput.value = formatAppointmentDate(selectedDate);
   }
+  setAppointmentDateError(visibleError);
+  renderDateCalendar();
   return isPastDate || isInvalidDate;
 }
 
@@ -219,8 +286,11 @@ function startEditingAppointment(appointment) {
   startHourInput.focus();
 }
 
-function setClientRequestMode({ locations, consultants }) {
+function setClientRequestMode({ locations, consultants: consultantOptions }) {
   isClientRequestForm = true;
+  consultantWorkdays = null;
+  consultants = consultantOptions || [];
+  renderDateCalendar();
   document.querySelector("#form-mode-label").textContent = "Afspraak aanvragen";
   document.querySelector("#form-title").textContent = "Afspraak voorstellen";
   document.querySelector("#appointment-client-field").hidden = true;
@@ -245,7 +315,19 @@ function setClientRequestMode({ locations, consultants }) {
       consultantInput.add(new Option(consultant.name, consultant.username));
     }
     consultantInput.disabled = matchingConsultants.length === 0;
+    renderDateCalendar();
+    validateAppointmentDate();
   });
+  consultantInput.addEventListener("change", () => {
+    renderDateCalendar();
+    validateAppointmentDate();
+  });
+}
+
+function setConsultantWorkdays(workdays) {
+  consultantWorkdays = typeof workdays === "string" ? workdays : "";
+  renderDateCalendar();
+  validateAppointmentDate();
 }
 
 export function loadClients(clients) {
@@ -280,17 +362,45 @@ export function initForm() {
   startHourInput.value = "09";
   startMinuteInput.value = "00";
   setAppointmentDate(localDateString(getInitialWorkday()));
-  datePickerInput.min = localDateString();
+  renderDateCalendar();
   dateInput.addEventListener("focus", validateAppointmentDate);
   dateInput.addEventListener("click", validateAppointmentDate);
   dateInput.addEventListener("beforeinput", overwriteAppointmentDateDigits);
   dateInput.addEventListener("input", maskAppointmentDateInput);
   dateInput.addEventListener("blur", validateAppointmentDate);
   dateInput.addEventListener("change", validateAppointmentDate);
-  datePickerInput.addEventListener("change", () => {
-    if (datePickerInput.value) dateInput.value = formatAppointmentDate(datePickerInput.value);
+  datePickerInput.addEventListener("click", () => {
+    if (dateCalendar.hidden) {
+      const selectedDate = parseAppointmentDate(dateInput.value);
+      const initialDate = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+      calendarMonth = new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
+      renderDateCalendar();
+      dateCalendar.hidden = false;
+      datePickerInput.setAttribute("aria-expanded", "true");
+    } else {
+      closeDateCalendar();
+    }
+  });
+  dateCalendar.querySelector("[data-calendar-previous]").addEventListener("click", () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+    renderDateCalendar();
+  });
+  dateCalendar.querySelector("[data-calendar-next]").addEventListener("click", () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+    renderDateCalendar();
+  });
+  dateCalendarGrid.addEventListener("click", (event) => {
+    const dateButton = event.target.closest("button[data-date]");
+    if (!dateButton || dateButton.disabled) return;
+    setAppointmentDate(dateButton.dataset.date);
+    closeDateCalendar();
     setAppointmentDateError();
     validateAppointmentDate();
+  });
+  dateCalendar.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    closeDateCalendar();
+    datePickerInput.focus();
   });
   durationInput.addEventListener("input", () => durationInput.setCustomValidity(""));
   cancelEditButton.addEventListener("click", resetAppointmentForm);
@@ -363,5 +473,5 @@ export function initForm() {
     (isClientRequestForm ? locationInput : clientInput).focus();
   });
 
-  return { startEditingAppointment, setClientRequestMode };
+  return { startEditingAppointment, setClientRequestMode, setConsultantWorkdays };
 }
