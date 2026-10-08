@@ -12,7 +12,7 @@ module.exports = defineConfig({
     browserName: "chromium",
   },
   webServer: {
-    command: "npm start",
+    command: "node server.js",
     url: `${baseURL}/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
