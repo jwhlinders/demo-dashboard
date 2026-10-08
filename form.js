@@ -233,6 +233,7 @@ function resetAppointmentForm() {
   clientInput.disabled = isClientRequestForm || clientInput.options.length <= 1;
   form.reset();
   setAppointmentDate(localDateString(getInitialWorkday()));
+  setAppointmentDateError();
   clientInput.value = "";
   clientInput.selectedIndex = 0;
   startHourInput.value = "09";
@@ -245,7 +246,7 @@ function validateAppointmentDate(rejectPast = true) {
   const date = parseAppointmentDate(dateInput.value);
   const isPastDate = rejectPast && Boolean(date) && date < today;
   const isInvalidDate = rejectPast && Boolean(dateInput.value) && !date;
-  let visibleError = "";
+  let visibleError = dateErrorMessage.textContent;
   if (isPastDate || isInvalidDate) {
     setAppointmentDate(today);
     visibleError = isPastDate ? "Een datum in het verleden is niet toegestaan." : "De ingevoerde datum is ongeldig";
