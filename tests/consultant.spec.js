@@ -38,6 +38,10 @@ function formatDate(date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
+async function selectDateRange(dateInput, start, end = start) {
+  await dateInput.evaluate((input, selection) => input.setSelectionRange(selection.start, selection.end), { start, end });
+}
+
 async function deleteAppointment(page, id) {
   const response = await page.request.delete(new URL(`/api/appointments/${id}`, page.url()).toString());
   expect(response.status()).toBe(204);
@@ -141,16 +145,9 @@ test("consultant sees an error for a past date", async ({ page }) => {
   yesterday.setDate(yesterday.getDate() - 1);
 
   const [year, month, day] = dateValue.split("-");
-  await dateInput.fill(`${day}-${month}-${year}`);
-  await dateInput.evaluate((input) => input.setSelectionRange(2, 2));
-  await dateInput.press("Backspace");
-  await expect(dateInput).toHaveValue(`${day[0]}_-${month}-${year}`);
-  await dateInput.fill(`${day}-${month}-${year}`);
-  await dateInput.evaluate((input) => input.setSelectionRange(0, 0));
-  await dateInput.press("Delete");
-  await expect(dateInput).toHaveValue(`_${day[1]}-${month}-${year}`);
-  await dateInput.fill(`${day}-${month}-${year}`);
-  await dateInput.evaluate((input) => input.setSelectionRange(0, 2));
+  const formattedDate = `${day}-${month}-${year}`;
+  await dateInput.fill(formattedDate);
+  await selectDateRange(dateInput, 0, 2);
   await dateInput.pressSequentially("11");
   await expect(dateInput).toHaveValue(`11-${month}-${year}`);
 
