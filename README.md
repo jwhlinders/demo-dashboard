@@ -21,8 +21,6 @@ Installeer de Playwright-browser eenmalig met `npx playwright install chromium`.
 
 ## GitHub Actions
 
-De workflow `.github/workflows/playwright.yml` voert de Playwright-tests alleen uit wanneer je die handmatig start via GitHub **Actions > Playwright tests > Run workflow**. Kies `main` om het rapport automatisch naar GitHub Pages te publiceren. De eerste keer moet je in **Settings > Pages** bij **Build and deployment** de bron **GitHub Actions** kiezen. Na afloop open je de workflowrun en klik je op de URL van de `github-pages`-deployment om het interactieve rapport te bekijken. Dit wordt ook als artefact `playwright-report` zeven dagen bewaard. Runs van andere branches publiceren niet naar Pages.
-
-Let op: iedereen die toegang heeft tot de gepubliceerde Pages-site kan het rapport bekijken. Het rapport bevat testdetails en mogelijk screenshots; de CI-tests gebruiken uitsluitend synthetische testaccounts.
+De workflow `.github/workflows/playwright.yml` voert de Playwright-tests alleen uit wanneer je die handmatig start via GitHub **Actions > Playwright tests > Run workflow**. Kies de branch en start de workflow. Deze gebruikt een tijdelijke PostgreSQL-service, initialiseert die met `tests/fixtures/ci-schema.sql` en draait de tests sequentieel. Na afloop vind je onderaan de workflowrun het artefact `playwright-report`. Download en pak het uit en open `index.html` om het HTML-testrapport te bekijken. Het artefact wordt zeven dagen bewaard.
 
 Stel de E2E-variabelen in op de accountgegevens uit dit fixture: `E2E_CONSULTANT_USERNAME=ci-consultant`, `E2E_CONSULTANT_PASSWORD=CIConsultant2026!`, `E2E_CLIENT_USERNAME=ci-client` en `E2E_CLIENT_PASSWORD=CIClient2026!`. Deze vaste gegevens zijn uitsluitend voor de wegwerpdatabase van CI; gebruik ze niet buiten tests.
