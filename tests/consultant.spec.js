@@ -134,10 +134,9 @@ test("consultant can add an appointment on a workday", async ({ page }) => {
   }
 });
 
-test("consultant sees an error for a past date or a non-workday", async ({ page }) => {
-  const { clientName, dateValue, werkdagen } = await getAppointmentData(page);
+test("consultant sees an error for a past date", async ({ page }) => {
+  const { dateValue } = await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
-  const datePicker = page.locator("#appointment-date-picker");
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
 
@@ -167,7 +166,12 @@ test("consultant sees an error for a past date or a non-workday", async ({ page 
   await dateInput.blur();
   await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
   await expect(page.locator("#appointment-date-error")).toHaveText("De ingevoerde datum is ongeldig");
+});
 
+test("consultant sees an error for a non-workday", async ({ page }) => {
+  const { clientName, werkdagen } = await getAppointmentData(page);
+  const dateInput = page.locator("#appointment-date");
+  const datePicker = page.locator("#appointment-date-picker");
   const unavailableDate = new Date();
   unavailableDate.setDate(unavailableDate.getDate() + 1);
   const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
