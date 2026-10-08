@@ -52,13 +52,13 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/ci-schema.sql
 
       - name: Run Playwright tests
-        run: npm run test:e2e -- --workers=1
+        run: npm run test:e2e -- --workers=1 --reporter=html,list
 
-      - name: Upload Playwright results
+      - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-results
-          path: test-results/
-          if-no-files-found: ignore
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: warn
           retention-days: 7
