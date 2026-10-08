@@ -688,6 +688,7 @@ app.post("/api/appointments", async (request, response, next) => {
   }
 
   const { date, start, notes } = request.body;
+  const dateValue = new Date(`${date}T00:00:00Z`);
   let consultantUsername = session.username;
   let clientUsername;
   try {
