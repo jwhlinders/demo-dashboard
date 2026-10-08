@@ -19,8 +19,8 @@ Voor cliënten zonder account maakt de server automatisch een gebruikersnaam op 
 
 Installeer de Playwright-browser eenmalig met `npx playwright install chromium`. Stel daarna `E2E_CONSULTANT_USERNAME` en `E2E_CONSULTANT_PASSWORD` in voor een consultantaccount in `.env` of de shell. De database moet ten minste één cliënt bevatten. Voer de test uit met `npm run test:e2e`; Playwright start de app met de bestaande `.env`-configuratie.
 
-## GitLab CI
+## GitHub Actions
 
-Bij iedere push naar `main` start de `.gitlab-ci.yml`-pipeline een tijdelijke PostgreSQL-service, initialiseert die met `tests/fixtures/ci-schema.sql` en voert de Playwright-tests uit. De pipeline installeert hiervoor Chromium en draait de tests sequentieel tegen een lege database. Pushes naar andere branches starten geen pipeline. Playwright-resultaten worden als GitLab-jobartefact bewaard.
+De workflow `.github/workflows/playwright.yml` voert de Playwright-tests alleen uit wanneer je die handmatig start via GitHub **Actions > Playwright tests > Run workflow**. Kies de branch en start de workflow. Deze gebruikt een tijdelijke PostgreSQL-service, initialiseert die met `tests/fixtures/ci-schema.sql` en draait de tests sequentieel. Playwright-resultaten worden zeven dagen als workflowartefact bewaard.
 
 Stel de E2E-variabelen in op de accountgegevens uit dit fixture: `E2E_CONSULTANT_USERNAME=ci-consultant`, `E2E_CONSULTANT_PASSWORD=CIConsultant2026!`, `E2E_CLIENT_USERNAME=ci-client` en `E2E_CLIENT_PASSWORD=CIClient2026!`. Deze vaste gegevens zijn uitsluitend voor de wegwerpdatabase van CI; gebruik ze niet buiten tests.
