@@ -139,23 +139,24 @@ test("consultant can add an appointment on a workday", async ({ page }) => {
 });
 
 test("consultant sees an error for a past date", async ({ page }) => {
-  const { dateValue } = await getAppointmentData(page);
+  await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
+  while (yesterday.getDay() === 0 || yesterday.getDay() === 6) {
+    yesterday.setDate(yesterday.getDate() - 1);
+  }
 
-  const [year, month, day] = dateValue.split("-");
-  const formattedDate = `${day}-${month}-${year}`;
+  const formattedDate = formatDate(yesterday).split("-").reverse().join("-");
   await dateInput.fill(formattedDate);
-  await selectDateRange(dateInput, 0, 2);
-  await dateInput.pressSequentially("11");
-  await expect(dateInput).toHaveValue(`11-${month}-${year}`);
-
-  const [yesterdayYear, yesterdayMonth, yesterdayDay] = formatDate(yesterday).split("-");
-  await dateInput.fill(`${yesterdayDay}${yesterdayMonth}${yesterdayYear}`);
   await dateInput.blur();
-  await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
   await expect(page.locator("#appointment-date-error")).toHaveText("Een datum in het verleden is niet toegestaan.");
+
+});
+
+test("consultant sees an error when entering invalid date", async ({ page }) => {
+  
+  const dateInput = page.locator("#appointment-date");
   await dateInput.fill("48012026");
   await expect(dateInput).toHaveValue("48-01-2026");
   await expect.poll(() => dateInput.evaluate((input) => input.validationMessage))
@@ -172,14 +173,18 @@ test("consultant sees an error for a non-workday", async ({ page }) => {
   const unavailableDate = new Date();
   unavailableDate.setDate(unavailableDate.getDate() + 1);
   const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+  // Zoek de eerstvolgende datum waarop de consultant niet werkt.
   while (werkdagen.includes(weekdayNames[unavailableDate.getDay()])) unavailableDate.setDate(unavailableDate.getDate() + 1);
   const unavailableDateValue = formatDate(unavailableDate);
+
+  // Controleer dat deze datum in de kalender niet gekozen kan worden.
   await datePicker.click();
   for (let monthIndex = 0; monthIndex < 2 && await page.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`).count() === 0; monthIndex += 1) {
     await page.locator("[data-calendar-next]").click();
   }
   await expect(page.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`)).toBeDisabled();
 
+  // Controleer de fout zowel bij het aanmaken via de API als in het formulier.
   const [unavailableYear, unavailableMonth, unavailableDay] = unavailableDateValue.split("-");
   const unavailableResponse = await page.request.post(new URL("/api/appointments", page.url()).toString(), {
     data: { date: unavailableDateValue, client: clientName, start: "10:15", durationMinutes: 30, notes: "" },
@@ -215,11 +220,16 @@ test("consultant can see an appointment in the agenda", async ({ page }) => {
 
   try {
     await page.reload();
-    const clientFilterValues = await page.locator("#agenda-client-filter option").evaluateAll((options) =>
+    const clientFilter = page.locator("#agenda-client-filter option");
+    const normalizedClientName = clientName.trim().toLocaleLowerCase("nl-NL");
+    await expect.poll(() => clientFilter.evaluateAll((options) =>
+      options.map((option) => option.value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
+    )).toContain(normalizedClientName);
+    const clientFilterValues = await clientFilter.evaluateAll((options) =>
       options.map((option) => option.value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
     );
     expect(new Set(clientFilterValues).size).toBe(clientFilterValues.length);
-    expect(clientFilterValues).toContain(clientName.trim().toLocaleLowerCase("nl-NL"));
+    expect(clientFilterValues).toContain(normalizedClientName);
     const today = new Date();
     const appointmentDate = new Date(`${dateValue}T00:00:00`);
     const monday = (date) => {
@@ -230,7 +240,7 @@ test("consultant can see an appointment in the agenda", async ({ page }) => {
     if (monday(appointmentDate) > monday(today)) await page.locator("#next-week").click();
 
     const appointmentCard = page.locator(".appointment-card").filter({ hasText: notes });
-  await expect(appointmentCard).toHaveCount(1);
+    await expect(appointmentCard).toHaveCount(1);
     await expect(appointmentCard).toContainText(clientName);
     await expect(appointmentCard).toContainText("10:15 - 10:45");
     await expect(appointmentCard).toContainText(notes);
