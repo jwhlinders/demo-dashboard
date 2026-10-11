@@ -160,7 +160,7 @@ test("consultant sees an error when entering invalid date", async ({ page }) => 
   const formattedDate = '48022030'
   await dateInput.fill(formattedDate);
   await dateInput.blur();
-  await expect(page.locator("#appointment-date-error")).toHaveText("Datum is ongeldig");
+  await expect(page.locator("#appointment-date-error")).toHaveText("De ingevoerde datum is ongeldig");
 
 
 });
