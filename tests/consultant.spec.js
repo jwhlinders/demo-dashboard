@@ -158,6 +158,7 @@ test("consultant sees an error when entering invalid date", async ({ page }) => 
   
   const dateInput = page.locator("#appointment-date");
   await dateInput.fill("48012026");
+  await dateInput.blur();
   await expect(dateInput).toHaveValue("48-01-2026");
   await expect.poll(() => dateInput.evaluate((input) => input.validationMessage))
     .toBe("Vul een geldige datum in als dd-mm-jjjj.");
