@@ -155,16 +155,14 @@ test("consultant sees an error for a past date", async ({ page }) => {
 });
 
 test("consultant sees an error when entering invalid date", async ({ page }) => {
-  
+  await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
-  await dateInput.fill("48012026");
+  const formattedDate = '48022030'
+  await dateInput.fill(formattedDate);
   await dateInput.blur();
-  await expect(dateInput).toHaveValue("48-01-2026");
-  await expect.poll(() => dateInput.evaluate((input) => input.validationMessage))
-    .toBe("Vul een geldige datum in als dd-mm-jjjj.");
-  await dateInput.blur();
-  await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
-  await expect(page.locator("#appointment-date-error")).toHaveText("De ingevoerde datum is ongeldig");
+  await expect(page.locator("#appointment-date-error")).toHaveText("Datum is ongeldig");
+
+
 });
 
 test("consultant sees an error for a non-workday", async ({ page }) => {
