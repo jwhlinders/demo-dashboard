@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Inloggen | Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-panel" aria-labelledby="login-title">
+      <a class="password-reset-status-link" href="/password-reset-status" aria-label="Wachtwoordaanvraagstatus bekijken" title="Wachtwoordaanvraagstatus bekijken">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      </a>
+      <div class="brand login-brand" aria-label="Agenda">
+        <span class="brand-mark" aria-hidden="true">&#128197;</span>
+        <span>Cliëntenagenda</span>
+      </div>
+      <p class="eyebrow">Beveiligde omgeving</p>
+      <h1 id="login-title">Welkom terug</h1>
+      <p class="login-copy">Log in om je agenda te bekijken.</p>
+      <form id="login-form">
+        <label class="field" for="username">
+          <span>Gebruikersnaam</span>
+          <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+        </label>
+        <label class="field" for="password">
+          <span>Wachtwoord</span>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="login-error" id="login-error" role="alert" hidden></p>
+        <button class="primary-button" type="submit">Inloggen</button>
+      </form>
+      <p class="login-copy register-prompt"><a id="password-reset-request-link" href="/password-reset-request">Nieuw wachtwoord aanvragen</a></p>
+      <p class="login-copy register-prompt">Nog geen account? <a href="/register">Registreer als cliënt</a>.</p>
+    </section>
+  </main>
+  <script>
+    const resetRequestLink = document.querySelector("#password-reset-request-link");
+    const loginUsernameInput = document.querySelector("#username");
+    loginUsernameInput.addEventListener("input", () => {
+      const username = loginUsernameInput.value.trim();
+      if (username) sessionStorage.setItem("passwordResetUsername", username);
+      else sessionStorage.removeItem("passwordResetUsername");
+    });
+    resetRequestLink.addEventListener("click", () => {
+      const username = loginUsernameInput.value.trim();
+      if (username) sessionStorage.setItem("passwordResetUsername", username);
+    });
+
+    document.querySelector("#login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const error = document.querySelector("#login-error");
+      try {
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(form))),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Ongeldige gebruikersnaam of wachtwoord.");
+        window.location.href = result.mustChangePassword ? "/change-password" : "/";
+      } catch (loginError) {
+        error.textContent = loginError.message || "Inloggen is mislukt. Controleer je verbinding.";
+        error.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>

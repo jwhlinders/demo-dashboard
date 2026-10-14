@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">
+    import "./agenda-controller.js";
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand" aria-label="Agenda">
+      <span class="brand-mark" aria-hidden="true">&#128197;</span>
+      <div class="brand-copy">
+        <span id="consultant-name">Agenda</span>
+        <span class="brand-location" id="consultant-location" hidden></span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <p class="today-label" id="today-label"></p>
+      <button class="profile-button" id="profile-button" type="button" aria-label="Profiel wijzigen" title="Profiel wijzigen" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 21a7 7 0 0 1 14 0" />
+        </svg>
+      </button>
+      <button class="settings-button" id="settings-button" type="button" aria-label="Instellingen" title="Instellingen" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.3" />
+          <path d="M19.4 15a7.64 7.64 0 0 0 .08-1l1.9-1.5-1.8-3.1-2.4 1a6.94 6.94 0 0 0-1.7-1L14.7 4h-5.4l-.5 2.4a6.94 6.94 0 0 0-1.7 1l-2.4-1-1.8 3.1L4.5 14a7.64 7.64 0 0 0 .08 1l-1.9 1.5 1.8 3.1 2.4-1c.5.4 1.1.8 1.7 1l.5 2.4h5.4l.5-2.4c.6-.2 1.2-.6 1.7-1l2.4 1 1.8-3.1-1.9-1.5Z" />
+        </svg>
+      </button>
+      <button class="logout-button" id="logout-button" type="button" aria-label="Uitloggen" title="Uitloggen">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 17l5-5-5-5" />
+          <path d="M15 12H3" />
+          <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+    <form id="profile-form">
+      <div class="profile-heading">
+        <div>
+          <p class="eyebrow">Cliëntgegevens</p>
+          <h2 id="profile-title">Mijn profiel</h2>
+        </div>
+        <button class="dialog-close" id="profile-close" type="button" aria-label="Venster sluiten" title="Venster sluiten">&times;</button>
+      </div>
+      <label class="field" for="profile-username">
+        <span>Gebruikersnaam</span>
+        <input id="profile-username" name="username" type="text" readonly aria-readonly="true">
+      </label>
+      <div class="profile-name-fields">
+        <label class="field" for="profile-first-name">
+          <span>Voornaam</span>
+          <input id="profile-first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" required>
+        </label>
+        <label class="field" for="profile-prefix">
+          <span>Tussenvoegsel</span>
+          <input id="profile-prefix" name="tussenvoegsel" type="text" maxlength="80" autocomplete="additional-name">
+        </label>
+        <label class="field" for="profile-last-name">
+          <span>Achternaam</span>
+          <input id="profile-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" required>
+        </label>
+      </div>
+      <label class="field" for="profile-phone">
+        <span>Telefoonnummer</span>
+        <input id="profile-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
+      </label>
+      <label class="field" for="profile-password">
+        <span>Nieuw wachtwoord <span class="optional">optioneel</span></span>
+        <input id="profile-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Laat leeg om niet te wijzigen">
+      </label>
+      <label class="field" for="profile-password-confirmation">
+        <span>Herhaal nieuw wachtwoord</span>
+        <input id="profile-password-confirmation" name="passwordConfirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password">
+      </label>
+      <p class="profile-message" id="profile-message" role="status" hidden></p>
+      <div class="profile-actions">
+        <button class="secondary-button" id="profile-cancel" type="button">Annuleren</button>
+        <button class="primary-button" id="profile-save" type="submit">Profiel opslaan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <main class="dashboard">
+    <section class="summary" aria-label="Afsprakenoverzicht">
+      <article class="summary-item summary-week">
+        <span class="summary-label">Afspraken in deze week</span>
+        <p class="summary-value"><span id="weekly-count">0</span><span class="summary-unit">afspraken</span></p>
+      </article>
+      <article class="summary-item summary-all">
+        <span class="summary-label">Vandaag</span>
+        <p class="summary-value"><span id="today-count">0</span><span class="summary-unit">afspraken</span></p>
+      </article>
+      <article class="summary-item summary-count">
+        <span class="summary-label">Totaal gepland</span>
+        <p class="summary-value"><span id="appointment-count">0</span><span class="summary-unit">afspraken</span></p>
+      </article>
+      <article class="summary-item summary-requested" id="requested-summary" hidden>
+        <button class="summary-action" id="requested-summary-button" type="button">
+          <span class="summary-label">Totaal aangevraagde items</span>
+          <span class="summary-value"><span id="requested-count">0</span><span class="summary-unit">afspraken</span></span>
+        </button>
+      </article>
+    </section>
+
+    <div class="workspace">
+      <section class="panel form-panel" aria-labelledby="form-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="form-mode-label">Nieuwe afspraak</p>
+            <h2 id="form-title">Afspraak plannen</h2>
+          </div>
+          <span class="today-tag">Ma t/m vr</span>
+        </div>
+
+        <form id="appointment-form">
+          <label class="field" for="appointment-date">
+            <span>Datum</span>
+            <span class="appointment-date-control">
+              <input id="appointment-date" type="text" inputmode="numeric" autocomplete="off" placeholder="dd-mm-jjjj" aria-describedby="appointment-date-hint" required>
+              <span class="appointment-date-picker">
+                <button id="appointment-date-picker" type="button" aria-label="Kies datum via kalender" aria-haspopup="dialog" aria-expanded="false" aria-controls="appointment-date-calendar">▦</button>
+              </span>
+              <input id="appointment-date-picker-value" name="date" type="hidden">
+              <div class="appointment-calendar" id="appointment-date-calendar" role="dialog" aria-label="Kies een afspraakdatum" hidden>
+                <div class="appointment-calendar-heading">
+                  <button type="button" data-calendar-previous aria-label="Vorige maand">&lsaquo;</button>
+                  <strong data-calendar-month></strong>
+                  <button type="button" data-calendar-next aria-label="Volgende maand">&rsaquo;</button>
+                </div>
+                <div class="appointment-calendar-grid" role="grid" aria-label="Datums">
+                  <span role="columnheader">Ma</span>
+                  <span role="columnheader">Di</span>
+                  <span role="columnheader">Wo</span>
+                  <span role="columnheader">Do</span>
+                  <span role="columnheader">Vr</span>
+                  <span role="columnheader">Za</span>
+                  <span role="columnheader">Zo</span>
+                </div>
+              </div>
+            </span>
+            <span class="visually-hidden" id="appointment-date-hint">Vul de datum in als dd-mm-jjjj of typ acht cijfers, bijvoorbeeld 08122026.</span>
+          </label>
+
+          <label class="field" id="appointment-client-field" for="appointment-client">
+            <span>Cliënt</span>
+            <select id="appointment-client" name="client" required disabled>
+              <option value="" selected disabled>Cliënten laden...</option>
+            </select>
+          </label>
+
+          <label class="field" id="appointment-location-field" for="appointment-location" hidden>
+            <span>Locatie</span>
+            <select id="appointment-location" name="locationId" required disabled>
+              <option value="" selected disabled>Kies een locatie</option>
+            </select>
+          </label>
+
+          <label class="field" id="appointment-consultant-field" for="appointment-consultant" hidden>
+            <span>Consultant</span>
+            <select id="appointment-consultant" name="consultantUsername" required disabled>
+              <option value="" selected disabled>Kies eerst een locatie</option>
+            </select>
+          </label>
+
+          <div class="time-fields">
+            <div class="field start-time-field">
+              <span>Begint om</span>
+              <div class="start-time-pickers">
+                <label for="appointment-hour">
+                  <span>Uur</span>
+                  <select id="appointment-hour" name="startHour" required></select>
+                </label>
+                <label for="appointment-minute">
+                  <span>Minuten</span>
+                  <select id="appointment-minute" name="startMinute" required></select>
+                </label>
+              </div>
+            </div>
+            <label class="field" id="appointment-duration-field" for="appointment-duration">
+              <span>Duur</span>
+              <div class="input-suffix">
+                <input id="appointment-duration" name="duration" type="number" min="15" max="720" step="5" value="30" required>
+                <span>min</span>
+              </div>
+            </label>
+          </div>
+
+          <label class="field" for="appointment-notes">
+            <span>Notitie <span class="optional">optioneel</span></span>
+            <textarea id="appointment-notes" name="notes" rows="3" maxlength="200" placeholder="Onderwerp of extra informatie"></textarea>
+          </label>
+
+          <p class="appointment-date-error" id="appointment-date-error" role="status" aria-live="polite"></p>
+          <button class="primary-button" id="form-submit-button" type="submit">
+            <span aria-hidden="true">+</span>
+            Afspraak opslaan
+          </button>
+          <button class="secondary-button" id="cancel-edit-button" type="button" hidden>Wijzigen annuleren</button>
+        </form>
+      </section>
+
+      <section class="panel calendar-panel" aria-labelledby="calendar-title">
+        <div class="calendar-heading">
+          <div>
+            <p class="eyebrow">Werkweek</p>
+            <h2 id="calendar-title">Agenda</h2>
+          </div>
+          <div class="week-controls" aria-label="Weeknavigatie">
+            <button class="week-button" id="previous-week" type="button" aria-label="Vorige week" title="Vorige week">&#8249;</button>
+            <button class="week-today" id="current-week" type="button">Vandaag</button>
+            <button class="week-button" id="next-week" type="button" aria-label="Volgende week" title="Volgende week">&#8250;</button>
+          </div>
+        </div>
+
+        <div class="calendar-filter">
+          <label class="agenda-filter" for="agenda-client-filter">
+            <span>Filter op cliënt</span>
+            <select id="agenda-client-filter" aria-label="Filter agenda op cliënt">
+              <option value="">Alle cliënten</option>
+            </select>
+          </label>
+        </div>
+        <div class="week-label" id="week-label" aria-live="polite"></div>
+        <div class="calendar-scroll">
+          <div class="calendar-grid" id="calendar-grid" aria-label="Werkdagen maandag tot en met vrijdag"></div>
+        </div>
+      </section>
+    </div>
+
+    <p class="storage-note" id="storage-status" role="status">Verbinden met de database...</p>
+  </main>
+</body>
+</html>
