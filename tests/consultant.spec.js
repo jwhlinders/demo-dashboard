@@ -51,7 +51,7 @@ test.beforeEach(async ({ page }) => {
   await loginAsConsultant(page);
 });
 
-test("consultant can log in and see their name", async ({ page }) => {
+test("consultant can log in and see their full name", async ({ page }) => {
   const response = await page.request.get(new URL("/api/consultant", page.url()).toString());
   expect(response.ok()).toBeTruthy();
   const consultant = await response.json();
