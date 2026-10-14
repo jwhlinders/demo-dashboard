@@ -99,7 +99,7 @@ test("consultant can open the settings page", async ({ page }) => {
   }
 });
 
-test("consultant can add an appointment on a workday", async ({ page }) => {
+test("consultant can add an appointment on a workday (ma-vr)", async ({ page }) => {
   const { clientSelect, clientName, dateValue, notes } = await getAppointmentData(page);
   const datePicker = page.locator("#appointment-date-picker");
   await datePicker.click();
