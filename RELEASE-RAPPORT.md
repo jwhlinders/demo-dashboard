@@ -4,7 +4,7 @@
 
 ## Samenvatting
 
-In de webapplicatie kunnen cliënten en consultants afspraken beheren. Cliënten kunnen een account maken, hun profiel beheren en afspraken aanvragen. Consultants kunnen de agenda beheren, aanvragen bevestigen en account- en wachtwoordaanvragen behandelen.
+In de webapplicatie kunnen cliënten en consultants afspraken beheren. Cliënten kunnen een account maken, hun profiel beheren en afspraken aanvragen. Consultants kunnen de agenda beheren, aanvragen bevestigen en account- en wachtwoordaanvragen behandelen. dit kan later gewijzigd worden.
 
 Het bevat de volgende functionaliteit uitgesplitst naar userstorie:
 
