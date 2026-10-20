@@ -1,7 +1,7 @@
 const { Pool } = require("pg");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const TEST_PASSWORD = "TestConsultant2026!";
+const TEST_PASSWORD = "Test2026!";
 const consultants = [
   {
     voornaam: "Eva",
