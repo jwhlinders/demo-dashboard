@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "start": "node --env-file=.env src/server.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "testdata:locaties": "node --env-file=.env src/testdata.js",
+    "testdata:consultants": "node --env-file=.env src/testdata-consultants.js",
+    "testdata:klanten": "node --env-file=.env src/testdata-klanten.js"
   },
   "dependencies": {
     "express": "^5.1.0",

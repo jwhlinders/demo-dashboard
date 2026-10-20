@@ -13,6 +13,18 @@ De applicatiecode en webbestanden staan in `src/`. Playwright-tests en testfixtu
 
 De server maakt de tabel `appointments` automatisch aan. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
 
+## Lokale testaccounts
+
+Vul een lokale testdatabase eerst met de basistabellen en locaties. Voer daarna vanuit de projectmap de scripts uit:
+
+```powershell
+npm run testdata:locaties
+npm run testdata:consultants
+npm run testdata:klanten
+```
+
+De scripts voegen fictieve testgegevens toe en zijn veilig opnieuw uit te voeren: bestaande testaccounts worden overgeslagen. Consultants kunnen inloggen met gebruikersnaam `emulder`, `jdekker`, `sverhoeven`, `tvanloon` of `nvisser`; voor deze accounts is het tijdelijke wachtwoord `TestConsultant2026!`. De testklanten gebruiken de gebruikersnamen uit `src/testdata-klanten.js` en het tijdelijke wachtwoord `Welkom01`; zij moeten dit wachtwoord bij de eerste login wijzigen. Gebruik deze scripts en wachtwoorden uitsluitend in een lokale testdatabase, niet in productie.
+
 ## Cliëntaccounts
 
 Voor cliënten zonder account maakt de server automatisch een gebruikersnaam op basis van de eerste letter van de voornaam en de achternaam (bijvoorbeeld `jjansen` voor Jan Jansen). Bij dubbele namen wordt een volgnummer toegevoegd. Het tijdelijke wachtwoord is `Welkom01`; cliënten moeten dit na de eerste login wijzigen. Nieuwe registraties krijgen dezelfde accountnaamregel en een tijdelijk wachtwoord.
