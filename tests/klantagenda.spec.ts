@@ -22,10 +22,7 @@ const CONFIG = {
 /* ------------------------------------------------------------------ */
 /* DATUM-HELPERS (alles is relatief aan de systeemdatum)               */
 /* ------------------------------------------------------------------ */
-const DAY_MS = 86_400_000;
 const pad = (n: number) => String(n).padStart(2, '0');
-const fmt = (d: Date) => `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`; // 22-10-2026
-const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; // 2026-10-22
 
 const addDays = (d: Date, n: number) => {
   const r = new Date(d);
@@ -42,10 +39,6 @@ const mondayOf = (d: Date) => {
   return r;
 };
 const sameWeek = (a: Date, b: Date) => sameDay(mondayOf(a), mondayOf(b));
-const weeksBetween = (from: Date, to: Date) =>
-  Math.round((mondayOf(to).getTime() - mondayOf(from).getTime()) / (7 * DAY_MS));
-const monthsBetween = (from: Date, to: Date) =>
-  (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
 
 /** Eerstvolgende werkdag na `from` (ma t/m vr). */
 const nextWorkday = (from: Date) => {
@@ -60,19 +53,11 @@ const nextSaturday = (from: Date) => {
 };
 /** Donderdag van volgende week. */
 const thursdayNextWeek = (from: Date) => addDays(mondayOf(from), 7 + 3);
-/** Positie van de dag in de agenda: maandag = 0 ... vrijdag = 4. */
-const dayIndex = (d: Date) => (d.getDay() + 6) % 7;
 
 /* ------------------------------------------------------------------ */
 /* TIJD-HELPERS                                                        */
 /* ------------------------------------------------------------------ */
 type Slot = { hour: number; minute: string };
-
-/** Willekeurige begintijd tussen 10 en 15 uur (voorkomt botsingen met bestaande afspraken om 09:00). */
-const randomSlot = (): Slot => ({
-  hour: 10 + Math.floor(Math.random() * 6),
-  minute: CONFIG.minuteOptions[Math.floor(Math.random() * CONFIG.minuteOptions.length)],
-});
 
 /** Bijv. slot 10:45 + 30 min => "10:45 - 11:15" (zoals op het agendakaartje). */
 const timeRange = (slot: Slot, durationMin: number) => {
@@ -98,8 +83,7 @@ test.describe('Afspraak aanvragen', () => {
     // 1. Eerst inloggen via de LoginPage
     await page.goto(CONFIG.loginUrl);
     await loginPage.login(CONFIG.user.username, CONFIG.user.password);
-
-    // 2. Daarna pas naar de AppointmentPage navigeren
+    await loginPage.expectLoggedIn();
     await app.open();
   });
 
@@ -109,28 +93,27 @@ test.describe('Afspraak aanvragen', () => {
     const today = new Date();
     const date = nextWorkday(today);
     const reason = uniqueReason();
+    await app.goToWeekOf(date);
     const before = await app.counters();
 
     const { consultantName, range } = await app.create({ date, reason });
 
-    // "Deze week" gaat alleen omhoog als de datum in de huidige week valt
-    await app.expectCounters(before, { week: sameWeek(date, today) ? 1 : 0, today: 0, total: 1 });
+    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
 
-    await app.goToWeekOf(date);
     await app.expectCard(date, reason, { range, consultantName });
   });
 
   test('TC-02: datum kiezen via kalender, afspraak volgende week zichtbaar na navigeren', async () => {
     const date = thursdayNextWeek(new Date());
     const reason = uniqueReason();
+    await app.goToWeekOf(date);
     const before = await app.counters();
 
     const { consultantName, range } = await app.create({ date, viaCalendar: true, reason });
 
-    // Andere week: "Deze week" en "Vandaag" blijven gelijk, "Totaal" +1
-    await app.expectCounters(before, { week: 0, today: 0, total: 1 });
+    // De weekteller volgt de geselecteerde agendaweek; na indienen staat de doelweek geselecteerd.
+    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
 
-    await app.goToWeekOf(date);
     await app.expectCard(date, reason, { range, consultantName });
 
     // "Vandaag" brengt de agenda terug naar de huidige week, waar het kaartje niet staat
@@ -265,8 +248,7 @@ test.describe('Afspraak aanvragen', () => {
 
     await app.expectCounters(before, { week: sameWeek(date, new Date()) ? 1 : 0, today: 0, total: 1 });
     await app.goToWeekOf(date);
-    await app.expectCard(date, id, { range, consultantName }); // let op: letterlijk als tekst, niet uitgevoerd
-    await expect(app.cardIn(date, id).locator('.appointment-notes').nth(1)).toHaveText(reason);
+    await app.expectCard(date, reason, { range, consultantName }); // let op: letterlijk als tekst, niet uitgevoerd
     expect(dialogSeen).toBe(false);
   });
 
@@ -281,8 +263,7 @@ test.describe('Afspraak aanvragen', () => {
 
     await app.expectCounters(before, { week: sameWeek(date, new Date()) ? 1 : 0, today: 0, total: 1 });
     await app.goToWeekOf(date);
-    const card = await app.expectCard(date, id, { range, consultantName });
-    await expect(card.locator('.appointment-notes').nth(1)).toHaveText(expected);
+    const card = await app.expectCard(date, id, { range, consultantName, notes: expected });
 
     // Kaartje loopt niet buiten zijn kolom
     const overflows = await card.evaluate((el) => el.scrollWidth > el.clientWidth + 1);

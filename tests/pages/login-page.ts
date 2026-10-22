@@ -11,8 +11,8 @@ export class LoginPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.username = page.getByRole('textbox', { name: 'Gebruikersnaam' });
-    this.password = page.getByRole('textbox', { name: 'Wachtwoord' });
+    this.username = page.locator('#username');
+    this.password = page.locator('#password');
     this.signIn = page.getByRole('button', { name: 'Inloggen' });
     this.error = page.locator('#login-error');
   }
@@ -49,4 +49,3 @@ export class LoginPage {
     }).toBe(false);
   }
 }
-

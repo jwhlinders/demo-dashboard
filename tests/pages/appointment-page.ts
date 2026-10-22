@@ -1,6 +1,17 @@
 import { expect, type Page, type Locator } from '@playwright/test';
 
 type Counters = { week: number; today: number; total: number };
+type Slot = { hour: number; minute: string };
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+/** Formats a slot and duration, e.g. 10:45 + 30 minutes => "10:45 - 11:15". */
+const timeRange = (slot: Slot, durationMin: number) => {
+  const start = slot.hour * 60 + Number(slot.minute);
+  const end = start + durationMin;
+
+  return `${pad(slot.hour)}:${slot.minute} - ${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
+};
 
 type CreateOptions = {
   date: Date;
@@ -12,6 +23,37 @@ type CreateOptions = {
   consultant?: number | null;
 };
 
+const DAY_MS = 86_400_000;
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function mondayOf(date: Date): Date {
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return monday;
+}
+
+function weeksBetween(from: Date, to: Date): number {
+  return Math.round(
+    (mondayOf(to).getTime() - mondayOf(from).getTime()) / (7 * DAY_MS),
+  );
+}
+function randomSlot(): Slot {
+  const minuteOptions = ['00', '15', '30', '45'];
+
+  return {
+    hour: 10 + Math.floor(Math.random() * 6),
+    minute: minuteOptions[Math.floor(Math.random() * minuteOptions.length)],
+  };
+}
+
+function dayIndex(date: Date): number {
+  return (date.getDay() + 6) % 7;
+}
 
 function fmt(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
@@ -68,8 +110,9 @@ export class AppointmentPage {
 
   async open(): Promise<void> {
     // Alleen navigeren, niet inloggen!
-    this.page.goto('/dashboard');
+    await this.page.goto('/dashboard');
     await expect(this.submit).toBeVisible();
+    await expect(this.page.locator('#storage-status')).toHaveText(/Je afspraken worden opgeslagen in PostgreSQL\./);
   }
 
   /* ----------------------------- Tellers --------------------------- */
@@ -173,14 +216,14 @@ export class AppointmentPage {
   }
 
   /** Controleert tijd, consultant, status en reden van het kaartje in de juiste dagkolom. */
-  async expectCard(date: Date, reason: string, expected: { range: string; consultantName: string }) {
+  async expectCard(date: Date, reason: string, expected: { range: string; consultantName: string; notes?: string }) {
     const card = this.cardIn(date, reason);
     await expect(this.dayColumn(date).locator('.day-number')).toHaveText(String(date.getDate()));
     await expect(card).toHaveCount(1);
     await expect(card.locator('.appointment-time')).toHaveText(expected.range); // 10:00 - 10:30
     await expect(card.locator('.appointment-client')).toHaveText(expected.consultantName); // consultant
-    await expect(card.locator('.appointment-notes').first()).toHaveText(CONFIG.status); // Status: aangevraagd
-    await expect(card.locator('.appointment-notes').nth(1)).toHaveText(reason); // reden gesprek
+    await expect(card.locator('.appointment-notes').first()).toHaveText('Status: aangevraagd'); // Status: aangevraagd
+    await expect(card.locator('.appointment-notes').nth(1)).toHaveText(expected.notes ?? reason); // reden gesprek
     return card;
   }
 
