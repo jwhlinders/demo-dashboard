@@ -27,6 +27,8 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/mijn_dashboard
       E2E_CONSULTANT_USERNAME: ci-consultant
       E2E_CONSULTANT_PASSWORD: CIConsultant2026!
+      TEST_USER: ci-consultant
+      TEST_PASS: CIConsultant2026!
       E2E_CLIENT_USERNAME: ci-client
       E2E_CLIENT_PASSWORD: CIClient2026!
 
