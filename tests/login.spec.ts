@@ -1,5 +1,5 @@
-const { test, expect } = require('@playwright/test');
-const { LoginPage } = require('./pages/login-page');
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { LoginPage } from './pages/login-page';
 
 /* ------------------------------------------------------------------ */
 /* CONFIGURATIE: pas aan op basis van je functionele documentatie      */
@@ -26,7 +26,7 @@ const CONFIG = {
 };
 
 test.describe('Loginpagina - functionele testcases', () => {
-  let login;
+  let login: LoginPage; 
 
   test.beforeEach(async ({ page }) => {
     login = new LoginPage(page);
@@ -118,6 +118,9 @@ test.describe('Loginpagina - functionele testcases', () => {
     for (const { role, user, requiredVariables } of e2eUsers) {
       test(`TC-09a: spaties rond gebruikersnaam (${role})`, async () => {
         test.skip(!user, `Zet ${requiredVariables} om deze test te draaien`);
+
+        if (!user) return; // TypeScript type guard
+
         await login.login(` ${user.username} `, user.password);
         if (CONFIG.usernameTrimmed) {
           await login.expectLoggedIn();
@@ -128,6 +131,7 @@ test.describe('Loginpagina - functionele testcases', () => {
 
       test(`TC-09b: gebruikersnaam in hoofdletters (${role})`, async () => {
         test.skip(!user, `Zet ${requiredVariables} om deze test te draaien`);
+        if (!user) return; // TypeScript type guard
         await login.login(user.username.toUpperCase(), user.password);
         if (CONFIG.usernameCaseSensitive) {
           await login.expectNotLoggedIn();
@@ -138,6 +142,7 @@ test.describe('Loginpagina - functionele testcases', () => {
 
       test(`TC-09c: wachtwoord is hoofdlettergevoelig (${role})`, async () => {
         test.skip(!user, `Zet ${requiredVariables} om deze test te draaien`);
+        if (!user) return; // TypeScript type guard
         await login.login(user.username, user.password.toUpperCase());
         await login.expectNotLoggedIn();
       });
@@ -154,6 +159,7 @@ test.describe('Loginpagina - functionele testcases', () => {
 
     test('TC-10b: geldig wachtwoord met speciale tekens', async () => {
       test.skip(!CONFIG.specialUser, 'Zet SPECIAL_USER en SPECIAL_PASS om deze test te draaien');
+      if (!CONFIG.specialUser) return;
       await login.login(CONFIG.specialUser.username, CONFIG.specialUser.password);
       await login.expectLoggedIn();
     });

@@ -1,7 +1,15 @@
-const { expect } = require('@playwright/test');
+import { expect, type Page, type Locator } from '@playwright/test';
 
-class LoginPage {
-  constructor(page) {
+export class LoginPage {
+
+  // 1. Definieer de types van de class properties
+  readonly page: Page;
+  readonly username: Locator;
+  readonly password: Locator;
+  readonly signIn: Locator;
+  readonly error: Locator;
+
+  constructor(page: Page) {
     this.page = page;
     this.username = page.getByRole('textbox', { name: 'Gebruikersnaam' });
     this.password = page.getByRole('textbox', { name: 'Wachtwoord' });
@@ -13,12 +21,12 @@ class LoginPage {
     await this.page.goto('/login');
   }
 
-  async fillCredentials(username, password) {
+  async fillCredentials(username: string, password: string): Promise<void> {
     await this.username.fill(username);
     await this.password.fill(password);
   }
 
-  async login(username, password) {
+  async login(username: string, password: string): Promise<void> {
     await this.fillCredentials(username, password);
     await this.signIn.click();
   }
@@ -35,9 +43,10 @@ class LoginPage {
     await expect(this.password).toHaveAttribute('type', 'password');
   }
 
-  async expectRequiredValidation(field) {
-    await expect.poll(() => field.evaluate((element) => element.validity.valid)).toBe(false);
+  async expectRequiredValidation(field: Locator): Promise<void> {
+    await expect.poll(async () => {
+      return await field.evaluate((element: HTMLInputElement) => element.validity.valid);
+    }).toBe(false);
   }
 }
 
-module.exports = { LoginPage };

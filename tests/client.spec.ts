@@ -1,9 +1,12 @@
-const { test, expect } = require("@playwright/test");
+import { test, expect, type Page, type Locator } from '@playwright/test';
 
-async function loginAsConsultant(page) {
+async function loginAsConsultant(page: Page) {
   const username = process.env.E2E_CONSULTANT_USERNAME;
   const password = process.env.E2E_CONSULTANT_PASSWORD;
   test.skip(!username || !password, "Set E2E_CONSULTANT_USERNAME and E2E_CONSULTANT_PASSWORD to run this test.");
+
+  // Type Guard: TypeScript snapt nu dat 'username' en 'password' vanaf hier gegarandeerd strings zijn
+  if (!username || !password) return;
 
   await page.goto("/login");
   await page.locator("#username").fill(username);
@@ -12,12 +15,12 @@ async function loginAsConsultant(page) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
-async function deleteAppointment(page, id) {
+async function deleteAppointment(page: Page, id: string) {
   const response = await page.request.delete(new URL(`/api/appointments/${id}`, page.url()).toString());
   expect(response.status()).toBe(204);
 }
 
-function formatDate(date) {
+function formatDate(date: Date): string {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
@@ -36,32 +39,52 @@ test("client can request an appointment with a consultant at a standard location
   let appointment;
   try {
     await clientPage.goto(new URL("/login", page.url()).toString());
-    await clientPage.locator("#username").fill(username);
-    await clientPage.locator("#password").fill(password);
+    await clientPage.locator("#username").fill(username!);
+    await clientPage.locator("#password").fill(password!);
     await clientPage.getByRole("button", { name: "Inloggen" }).click();
     await expect(clientPage).toHaveURL(/\/dashboard$/);
 
     const profileResponse = await clientPage.request.get(new URL("/api/profile", page.url()).toString());
     expect(profileResponse.ok()).toBeTruthy();
     const clientProfile = await profileResponse.json();
+
     const optionsResponse = await clientPage.request.get(new URL("/api/appointment-options", page.url()).toString());
     expect(optionsResponse.ok()).toBeTruthy();
-    const options = await optionsResponse.json();
+
+    // 1. Cast de JSON-output direct naar de juiste structuur (slechts één keer aanroepen!)
+    // Voeg 'werkdagen' toe aan de type-declaratie van de consultants
+    const options = await optionsResponse.json() as {
+      consultants: Array<{
+        username: string;
+        locationId: string | number;
+        werkdagen?: string | number;
+      }>;
+      locations: Array<{ id: string | number }>;
+    };
+
     expect(options.locations.length).toBeGreaterThan(0);
+
+    // TypeScript herkent 'item.username' nu vlekkeloos
     expect(new Set(options.consultants.map((item) => item.username.trim().toLocaleLowerCase("nl-NL"))).size).toBe(options.consultants.length);
+
     const consultantResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
     expect(consultantResponse.ok()).toBeTruthy();
-    const loggedInConsultant = await consultantResponse.json();
+
+    // 2. Cast ook deze response zodat 'username' bekend is op dit object
+    const loggedInConsultant = await consultantResponse.json() as { username: string };
+
     const consultant = options.consultants.find((item) => item.username === loggedInConsultant.username);
     expect(consultant).toBeTruthy();
-    const location = options.locations.find((item) => String(item.id) === String(consultant.locationId));
+
+    // 3. Gebruik een uitroepteken (!) achter consultant omdat we hierboven al hebben gecheckt dat hij bestaat
+    const location = options.locations.find((item) => String(item.id) === String(consultant!.locationId));
     expect(location).toBeTruthy();
 
     await expect(clientPage.locator("#appointment-location")).toBeVisible();
-    await clientPage.locator("#appointment-location").selectOption(String(location.id));
-    await clientPage.locator("#appointment-consultant").selectOption(consultant.username);
+    await clientPage.locator("#appointment-location").selectOption(String(location!.id));
+    await clientPage.locator("#appointment-consultant").selectOption(consultant!.username);
     const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
-    const consultantWorkdays = String(consultant.werkdagen || "");
+    const consultantWorkdays = String(consultant!.werkdagen || "");
     test.skip(!consultantWorkdays, "The selected consultant has no configured workdays.");
     const appointmentDate = new Date();
     appointmentDate.setDate(appointmentDate.getDate() + 1);
