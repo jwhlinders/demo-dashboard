@@ -9,7 +9,7 @@ async function loginAsConsultant(page) {
   await page.locator("#username").fill(username);
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "Inloggen" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 async function getAppointmentData(page) {

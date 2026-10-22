@@ -64,7 +64,7 @@
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Ongeldige gebruikersnaam of wachtwoord.");
-        window.location.href = result.mustChangePassword ? "/change-password" : "/";
+        window.location.href = result.mustChangePassword ? "/change-password" : "/dashboard";
       } catch (loginError) {
         error.textContent = loginError.message || "Inloggen is mislukt. Controleer je verbinding.";
         error.hidden = false;

@@ -262,7 +262,7 @@ app.post("/api/login", async (request, response, next) => {
   const password = typeof request.body?.password === "string" ? request.body.password : "";
   try {
     const consultantResult = await pool.query(
-      "SELECT username, voornaam, tussenvoegsel, achternaam, password, functie FROM consultant WHERE username = $1 LIMIT 1",
+      "SELECT username, voornaam, tussenvoegsel, achternaam, password, functie FROM consultant WHERE LOWER(username) = LOWER($1) LIMIT 1",
       [username],
     );
     let account = consultantResult.rows[0];
@@ -843,6 +843,7 @@ app.delete("/api/appointments/:id", async (request, response, next) => {
 });
 
 app.use("/api", (request, response) => response.status(404).json({ error: "API-route niet gevonden." }));
+app.get("/dashboard", (request, response) => response.sendFile(path.join(__dirname, "index.html")));
 app.get("/", (request, response) => response.sendFile(path.join(__dirname, "index.html")));
 app.get("/styles.css", (request, response) => response.sendFile(path.join(__dirname, "styles.css")));
 app.get("/agenda-controller.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-controller.js")));

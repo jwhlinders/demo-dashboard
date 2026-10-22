@@ -9,7 +9,7 @@ async function loginAsConsultant(page) {
   await page.locator("#username").fill(username);
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "Inloggen" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 async function deleteAppointment(page, id) {
@@ -39,7 +39,7 @@ test("client can request an appointment with a consultant at a standard location
     await clientPage.locator("#username").fill(username);
     await clientPage.locator("#password").fill(password);
     await clientPage.getByRole("button", { name: "Inloggen" }).click();
-    await expect(clientPage).toHaveURL(/\/$/);
+    await expect(clientPage).toHaveURL(/\/dashboard$/);
 
     const profileResponse = await clientPage.request.get(new URL("/api/profile", page.url()).toString());
     expect(profileResponse.ok()).toBeTruthy();

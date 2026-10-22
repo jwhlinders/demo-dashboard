@@ -3,7 +3,8 @@ const { defineConfig } = require("@playwright/test");
 
 if (fs.existsSync(".env")) process.loadEnvFile(".env");
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const port = process.env.PLAYWRIGHT_PORT || "3100";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`;
 
 module.exports = defineConfig({
   testDir: "./tests",
@@ -13,8 +14,9 @@ module.exports = defineConfig({
   },
   webServer: {
     command: "node src/server.js",
+    env: { PORT: port },
     url: `${baseURL}/login`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: Boolean(process.env.PLAYWRIGHT_BASE_URL) && !process.env.CI,
     timeout: 120_000,
   },
 });
