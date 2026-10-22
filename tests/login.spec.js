@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { LoginPage } = require('./pages/login-page');
 
 /* ------------------------------------------------------------------ */
 /* CONFIGURATIE: pas aan op basis van je functionele documentatie      */
@@ -23,52 +24,6 @@ const CONFIG = {
   genericError: /onjuist|ongeldig|incorrect|invalid/i, // foutmelding bij foute login
   requiredError: /verplicht|required|vul .* in/i, // melding bij lege velden
 };
-
-/* ------------------------------------------------------------------ */
-/* PAGE OBJECT                                                         */
-/* ------------------------------------------------------------------ */
-class LoginPage {
-  constructor(page) {
-    this.page = page;
-    this.username = page.getByRole('textbox', { name: 'Gebruikersnaam' });
-    this.password = page.getByRole('textbox', { name: 'Wachtwoord' });
-    this.signIn = page.getByRole('button', { name: 'Inloggen' })
-    this.error = page.locator('[role="alert"], .error, .error-message, .invalid-feedback').first();
-  }
-
-  async goto() {
-    await this.page.goto(CONFIG.loginUrl);
-  }
-
-  async fill(username, password) {
-    await this.username.fill(username);
-    await this.password.fill(password);
-  }
-
-  async login(username, password) {
-    await this.fill(username, password);
-    await this.signIn.click();
-  }
-
-  /** Controleert dat de gebruiker NIET is ingelogd. */
-  async expectNotLoggedIn() {
-    await expect(this.page).not.toHaveURL(CONFIG.successUrl);
-    await expect(this.signIn).toBeVisible();
-  }
-
-  async expectLoggedIn() {
-    await expect(this.page).toHaveURL(CONFIG.successUrl);
-  }
-
-  /** Foutmelding zichtbaar (custom) of HTML5-validatie actief op het veld. */
-  async expectRequiredValidation(field) {
-    const customMessage = this.page.getByText(CONFIG.requiredError).first();
-    const html5Invalid = await field.evaluate((el) => !el.validity.valid);
-    if (!html5Invalid) {
-      await expect(customMessage).toBeVisible();
-    }
-  }
-}
 
 test.describe('Loginpagina - functionele testcases', () => {
   let login;
