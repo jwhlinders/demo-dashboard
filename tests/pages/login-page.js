@@ -1,18 +1,25 @@
+const { expect } = require('@playwright/test');
+
 class LoginPage {
   constructor(page) {
     this.page = page;
     this.username = page.getByRole('textbox', { name: 'Gebruikersnaam' });
     this.password = page.getByRole('textbox', { name: 'Wachtwoord' });
     this.signIn = page.getByRole('button', { name: 'Inloggen' });
+    this.error = page.locator('#login-error');
   }
 
   async goto() {
     await this.page.goto('/login');
   }
 
-  async login(username, password) {
+  async fillCredentials(username, password) {
     await this.username.fill(username);
     await this.password.fill(password);
+  }
+
+  async login(username, password) {
+    await this.fillCredentials(username, password);
     await this.signIn.click();
   }
 
@@ -29,10 +36,7 @@ class LoginPage {
   }
 
   async expectRequiredValidation(field) {
-    await expect.poll(async () => {
-      const html5Invalid = await field.evaluate((el) => !el.validity.valid);
-      return html5Invalid || await this.requiredError.isVisible();
-    }).toBe(true);
+    await expect.poll(() => field.evaluate((element) => element.validity.valid)).toBe(false);
   }
 }
 

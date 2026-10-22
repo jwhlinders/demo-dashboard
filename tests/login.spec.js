@@ -41,7 +41,7 @@ test.describe('Loginpagina - functionele testcases', () => {
   });
 
   test('TC-02: inloggen met Enter-toets', async () => {
-    await login.fill(CONFIG.validUser.username, CONFIG.validUser.password);
+    await login.fillCredentials(CONFIG.validUser.username, CONFIG.validUser.password);
     await login.password.press('Enter');
     await login.expectLoggedIn();
   });
