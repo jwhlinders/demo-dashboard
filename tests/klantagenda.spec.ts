@@ -13,12 +13,21 @@ const CONFIG = {
     username: process.env.E2E_CLIENT_USERNAME ?? 'testuser',
     password: process.env.E2E_CLIENT_PASSWORD ?? 'Test1234!',
   },
+  cleanupUser: {
+    username: process.env.E2E_CONSULTANT_USERNAME,
+    password: process.env.E2E_CONSULTANT_PASSWORD,
+  },
   firstStartHour: 8, // eerste optie in dropdown "Uur"
   lastStartHour: 17, // laatste optie in dropdown "Uur"
   minuteOptions: ['00', '15', '30', '45'],
   status: /Status:\s*aangevraagd/i, // eerste regel met notities op het agendakaartje
   notesMaxLength: 200, // maxlength van "Reden gesprek"
 };
+
+type CreatedAppointment = { id: string; clientUsername: string };
+
+const createdAppointmentIds = new Set<string>();
+const pendingAppointmentResponses: Promise<void>[] = [];
 
 /* ------------------------------------------------------------------ */
 /* DATUM-HELPERS (alles is relatief aan de systeemdatum)               */
@@ -37,11 +46,56 @@ test.describe('Afspraak aanvragen', () => {
     const loginPage = new LoginPage(page);
     app = new AppointmentPage(page);
 
+    page.on('response', (response) => {
+      const request = response.request();
+      if (
+        request.method() !== 'POST' ||
+        new URL(response.url()).pathname !== '/api/appointments' ||
+        response.status() !== 201
+      ) return;
+
+      pendingAppointmentResponses.push((async () => {
+        const appointment = await response.json() as CreatedAppointment;
+        if (appointment.clientUsername === CONFIG.user.username) {
+          expect(appointment.id).toBeTruthy();
+          createdAppointmentIds.add(appointment.id);
+        }
+      })());
+    });
+
     // 1. Eerst inloggen via de LoginPage
     await page.goto(CONFIG.loginUrl);
     await loginPage.login(CONFIG.user.username, CONFIG.user.password);
     await loginPage.expectLoggedIn();
     await app.open();
+  });
+
+  test.afterAll(async ({ browser, baseURL }) => {
+    await Promise.all(pendingAppointmentResponses);
+    if (createdAppointmentIds.size === 0) return;
+
+    const { username, password } = CONFIG.cleanupUser;
+    if (!username || !password) {
+      throw new Error(
+        'Afspraken opruimen vereist E2E_CONSULTANT_USERNAME en E2E_CONSULTANT_PASSWORD.',
+      );
+    }
+
+    const context = await browser.newContext({ baseURL });
+    try {
+      const cleanupPage = await context.newPage();
+      const loginPage = new LoginPage(cleanupPage);
+      await loginPage.goto();
+      await loginPage.login(username, password);
+      await loginPage.expectLoggedIn();
+
+      for (const id of createdAppointmentIds) {
+        const response = await cleanupPage.request.delete(`/api/appointments/${encodeURIComponent(id)}`);
+        expect(response.status(), `Afspraak ${id} opruimen`).toBe(204);
+      }
+    } finally {
+      await context.close();
+    }
   });
 
   /* ---------------------------- POSITIEF --------------------------- */
