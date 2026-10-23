@@ -246,12 +246,15 @@ function validateAppointmentDate(rejectPast = true) {
   const date = parseAppointmentDate(dateInput.value);
   const isPastDate = rejectPast && Boolean(date) && date < today;
   const isInvalidDate = rejectPast && Boolean(dateInput.value) && !date;
-  let visibleError = dateErrorMessage.textContent;
   if (isPastDate || isInvalidDate) {
-    setAppointmentDate(today);
-    visibleError = isPastDate ? "Een datum in het verleden is niet toegestaan." : "De ingevoerde datum is ongeldig";
+    const message = isPastDate ? "Een datum in het verleden is niet toegestaan." : "De ingevoerde datum is ongeldig";
+    dateInput.setCustomValidity(message);
+    setAppointmentDateError(message);
+    renderDateCalendar();
+    return true;
   }
   const selectedDate = parseAppointmentDate(dateInput.value);
+  let visibleError = dateErrorMessage.textContent;
   if (!selectedDate) {
     dateInput.setCustomValidity(dateInput.value ? "Vul een geldige datum in als dd-mm-jjjj." : "");
     datePickerValue.value = "";
