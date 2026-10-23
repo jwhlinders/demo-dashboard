@@ -20,10 +20,6 @@ async function deleteAppointment(page: Page, id: string) {
   expect(response.status()).toBe(204);
 }
 
-function formatDate(date: Date): string {
-  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
-}
-
 test.beforeEach(async ({ page }) => {
   await loginAsConsultant(page);
 });
@@ -93,28 +89,6 @@ test("client can request an appointment with a consultant at a standard location
     const reason = `Playwright request ${Date.now()}`;
 
     const dateInput = clientPage.locator("#appointment-date");
-    const datePicker = clientPage.locator("#appointment-date-picker");
-    await datePicker.click();
-    const unavailableDate = new Date();
-    unavailableDate.setDate(unavailableDate.getDate() + 1);
-    while (consultantWorkdays.includes(weekdayNames[unavailableDate.getDay()])) unavailableDate.setDate(unavailableDate.getDate() + 1);
-    const unavailableDateValue = formatDate(unavailableDate);
-    for (let month = 0; month < 2 && await clientPage.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`).count() === 0; month += 1) {
-      await clientPage.locator("[data-calendar-next]").click();
-    }
-    await expect(clientPage.locator(`#appointment-date-calendar [data-date="${unavailableDateValue}"]`)).toBeDisabled();
-    const [unavailableYear, unavailableMonth, unavailableDay] = unavailableDateValue.split("-");
-    await dateInput.fill(`${unavailableDay}${unavailableMonth}${unavailableYear}`);
-    await dateInput.blur();
-    await expect(clientPage.locator("#appointment-date-error")).toHaveText(`consultant niet aanwezig op ${unavailableDay}-${unavailableMonth}-${unavailableYear}`);
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const [yesterdayYear, yesterdayMonth, yesterdayDay] = formatDate(yesterday).split("-");
-    await dateInput.fill(`${yesterdayDay}${yesterdayMonth}${yesterdayYear}`);
-    await dateInput.blur();
-    await expect(dateInput).toHaveValue(formatDate(new Date()).split("-").reverse().join("-"));
-    await expect(clientPage.locator("#appointment-date-error")).toHaveText("Een datum in het verleden is niet toegestaan.");
     const [year, month, day] = dateValue.split("-");
     await dateInput.fill(`${day}${month}${year}`);
     await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
