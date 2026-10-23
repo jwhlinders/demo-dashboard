@@ -1,6 +1,7 @@
 import { test, expect, Page, Locator } from '@playwright/test';
 import { AppointmentPage } from './pages/appointment-page';
 import { LoginPage } from './pages/login-page';
+import { addDays, formatDateInput, isWeekend,  nextSaturday,  nextWorkday,  thursdayNextWeek,  timeRange,  type Slot} from './helpers/date-time';
 
 /* ------------------------------------------------------------------ */
 /* CONFIGURATIE                                                        */
@@ -22,50 +23,6 @@ const CONFIG = {
 /* ------------------------------------------------------------------ */
 /* DATUM-HELPERS (alles is relatief aan de systeemdatum)               */
 /* ------------------------------------------------------------------ */
-const pad = (n: number) => String(n).padStart(2, '0');
-
-const addDays = (d: Date, n: number) => {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-};
-const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-
-/** Maandag van de week waarin d valt. */
-const mondayOf = (d: Date) => {
-  const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  r.setDate(r.getDate() - ((r.getDay() + 6) % 7));
-  return r;
-};
-const sameWeek = (a: Date, b: Date) => sameDay(mondayOf(a), mondayOf(b));
-
-/** Eerstvolgende werkdag na `from` (ma t/m vr). */
-const nextWorkday = (from: Date) => {
-  let d = addDays(from, 1);
-  while (isWeekend(d)) d = addDays(d, 1);
-  return d;
-};
-const nextSaturday = (from: Date) => {
-  let d = addDays(from, 1);
-  while (d.getDay() !== 6) d = addDays(d, 1);
-  return d;
-};
-/** Donderdag van volgende week. */
-const thursdayNextWeek = (from: Date) => addDays(mondayOf(from), 7 + 3);
-
-/* ------------------------------------------------------------------ */
-/* TIJD-HELPERS                                                        */
-/* ------------------------------------------------------------------ */
-type Slot = { hour: number; minute: string };
-
-/** Bijv. slot 10:45 + 30 min => "10:45 - 11:15" (zoals op het agendakaartje). */
-const timeRange = (slot: Slot, durationMin: number) => {
-  const start = slot.hour * 60 + Number(slot.minute);
-  const end = start + durationMin;
-  return `${pad(slot.hour)}:${slot.minute} - ${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
-};
-
 const uniqueReason = (prefix = 'Intake') => `${prefix} ${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
 
 
@@ -204,7 +161,7 @@ test.describe('Afspraak aanvragen', () => {
     await app.minute.selectOption('00');
     await app.reason.fill(uniqueReason('Niet-beschikbare consultant'));
 
-    const formattedDate = `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
+    const formattedDate = formatDateInput(date);
     let createRequests = 0;
     const countCreateRequests = (request: { method(): string; url(): string }) => {
       if (request.method() === 'POST' && request.url().endsWith('/api/appointments')) createRequests += 1;

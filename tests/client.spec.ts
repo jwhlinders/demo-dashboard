@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
+import { formatDateInput, formatISODate, nextScheduledWorkday } from './helpers/date-time';
 
 async function loginAsConsultant(page: Page) {
   const username = process.env.E2E_CONSULTANT_USERNAME;
@@ -52,6 +53,7 @@ test("client can request an appointment with a consultant at a standard location
     const options = await optionsResponse.json() as {
       consultants: Array<{
         username: string;
+        name: string;
         locationId: string | number;
         werkdagen?: string | number;
       }>;
@@ -71,27 +73,26 @@ test("client can request an appointment with a consultant at a standard location
 
     const consultant = options.consultants.find((item) => item.username === loggedInConsultant.username);
     expect(consultant).toBeTruthy();
+    if (!consultant) throw new Error(`Consultant ${loggedInConsultant.username} was not found in appointment options.`);
 
     // 3. Gebruik een uitroepteken (!) achter consultant omdat we hierboven al hebben gecheckt dat hij bestaat
-    const location = options.locations.find((item) => String(item.id) === String(consultant!.locationId));
+    const location = options.locations.find((item) => String(item.id) === String(consultant.locationId));
     expect(location).toBeTruthy();
+    if (!location) throw new Error(`No location found for consultant ${consultant.username}.`);
 
     await expect(clientPage.locator("#appointment-location")).toBeVisible();
-    await clientPage.locator("#appointment-location").selectOption(String(location!.id));
-    await clientPage.locator("#appointment-consultant").selectOption(consultant!.username);
-    const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
-    const consultantWorkdays = String(consultant!.werkdagen || "");
+    await clientPage.locator("#appointment-location").selectOption(String(location.id));
+    await clientPage.locator("#appointment-consultant").selectOption(consultant.username);
+    const consultantWorkdays = String(consultant.werkdagen || "");
     test.skip(!consultantWorkdays, "The selected consultant has no configured workdays.");
-    const appointmentDate = new Date();
-    appointmentDate.setDate(appointmentDate.getDate() + 1);
-    while (!consultantWorkdays.includes(weekdayNames[appointmentDate.getDay()])) appointmentDate.setDate(appointmentDate.getDate() + 1);
-    const dateValue = [appointmentDate.getFullYear(), String(appointmentDate.getMonth() + 1).padStart(2, "0"), String(appointmentDate.getDate()).padStart(2, "0")].join("-");
+    const appointmentDate = nextScheduledWorkday(new Date(), consultantWorkdays);
+    const dateValue = formatISODate(appointmentDate);
     const reason = `Playwright request ${Date.now()}`;
 
     const dateInput = clientPage.locator("#appointment-date");
-    const [year, month, day] = dateValue.split("-");
-    await dateInput.fill(`${day}${month}${year}`);
-    await expect(dateInput).toHaveValue(`${day}-${month}-${year}`);
+    const formattedAppointmentDate = formatDateInput(appointmentDate);
+    await dateInput.fill(formattedAppointmentDate.replaceAll("-", ""));
+    await expect(dateInput).toHaveValue(formattedAppointmentDate);
     await clientPage.locator("#appointment-hour").selectOption("10");
     await clientPage.locator("#appointment-minute").selectOption("00");
     await clientPage.locator("#appointment-notes").fill(reason);

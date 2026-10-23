@@ -1,17 +1,7 @@
 import { expect, type Page, type Locator } from '@playwright/test';
+import { pad, timeRange, type Slot } from '../helpers/date-time';
 
 type Counters = { week: number; today: number; total: number };
-type Slot = { hour: number; minute: string };
-
-const pad = (value: number) => String(value).padStart(2, '0');
-
-/** Formats a slot and duration, e.g. 10:45 + 30 minutes => "10:45 - 11:15". */
-const timeRange = (slot: Slot, durationMin: number) => {
-  const start = slot.hour * 60 + Number(slot.minute);
-  const end = start + durationMin;
-
-  return `${pad(slot.hour)}:${slot.minute} - ${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
-};
 
 type CreateOptions = {
   date: Date;
