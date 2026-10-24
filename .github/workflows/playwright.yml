@@ -31,6 +31,8 @@ jobs:
       E2E_CONSULTANT_PASSWORD: CIConsultant2026!
       E2E_CLIENT_USERNAME: ci-clienta
       E2E_CLIENT_PASSWORD: CIClient2026!
+      E2E_2ND_CLIENT_USERNAME: ci-clientb
+      E2E_2ND_CLIENT_PASSWORD: CIClient2026!
 
     steps:
       - name: Check out repository
