@@ -1,7 +1,7 @@
 import { test, expect, Page, Locator } from '@playwright/test';
 import { AppointmentPage } from './pages/appointment-page';
 import { LoginPage } from './pages/login-page';
-import { addDays, formatDateInput, isWeekend,  nextSaturday,  nextWorkday,  thursdayNextWeek,  timeRange,  type Slot} from './helpers/date-time';
+import { addDays, formatDateInput, isWeekend, mondayOf, nextSaturday, nextScheduledWorkday, nextWorkday, sameWeek, timeRange, type Slot } from './helpers/date-time';
 
 /* ------------------------------------------------------------------ */
 /* CONFIGURATIE                                                        */
@@ -33,6 +33,23 @@ const pendingAppointmentResponses: Promise<void>[] = [];
 /* DATUM-HELPERS (alles is relatief aan de systeemdatum)               */
 /* ------------------------------------------------------------------ */
 const uniqueReason = (prefix = 'Intake') => `${prefix} ${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+async function defaultConsultantWorkdays(page: Page): Promise<string> {
+  const response = await page.request.get(new URL('/api/appointment-options', page.url()).toString());
+  expect(response.ok()).toBe(true);
+
+  const options = await response.json() as {
+    locations: Array<{ id: string | number }>;
+    consultants: Array<{ locationId: string | number; werkdagen: string | null }>;
+  };
+  const defaultLocation = options.locations[0];
+  const consultant = options.consultants.find((item) => String(item.locationId) === String(defaultLocation?.id));
+  if (!consultant) throw new Error('Geen consultant beschikbaar op de standaardlocatie.');
+
+  const workdays = String(consultant.werkdagen || '');
+  test.skip(!workdays, 'De standaardconsultant heeft geen werkdagen ingesteld.');
+  return workdays;
+}
 
 
 /* ------------------------------------------------------------------ */
@@ -100,9 +117,8 @@ test.describe('Afspraak aanvragen', () => {
 
   /* ---------------------------- POSITIEF --------------------------- */
 
-  test('TC-01: geldige aanvraag verschijnt in de agenda (eerstvolgende werkdag)', async () => {
-    const today = new Date();
-    const date = nextWorkday(today);
+  test('TC-01: geldige aanvraag verschijnt in de agenda (eerstvolgende werkdag)', async ({ page }) => {
+    const date = nextScheduledWorkday(new Date(), await defaultConsultantWorkdays(page));
     const reason = uniqueReason();
     await app.goToWeekOf(date);
     const before = await app.counters();
@@ -114,8 +130,11 @@ test.describe('Afspraak aanvragen', () => {
     await app.expectCard(date, reason, { range, consultantName });
   });
 
-  test('TC-02: datum kiezen via kalender, afspraak volgende week zichtbaar na navigeren', async () => {
-    const date = thursdayNextWeek(new Date());
+  test('TC-02: datum kiezen via kalender, afspraak volgende week zichtbaar na navigeren', async ({ page }) => {
+    const workdays = await defaultConsultantWorkdays(page);
+    const nextMonday = addDays(mondayOf(new Date()), 7);
+    const date = nextScheduledWorkday(addDays(nextMonday, -1), workdays);
+    test.skip(!sameWeek(date, nextMonday) || isWeekend(date), 'De standaardconsultant heeft volgende week geen beschikbare werkdag.');
     const reason = uniqueReason();
     await app.goToWeekOf(date);
     const before = await app.counters();
@@ -148,8 +167,8 @@ test.describe('Afspraak aanvragen', () => {
     await app.expectCard(now, reason, { range, consultantName });
   });
 
-  test('TC-04: eindtijd wordt juist berekend, ook over het hele uur heen (:45 + 30 min)', async () => {
-    const date = nextWorkday(new Date());
+  test('TC-04: eindtijd wordt juist berekend, ook over het hele uur heen (:45 + 30 min)', async ({ page }) => {
+    const date = nextScheduledWorkday(new Date(), await defaultConsultantWorkdays(page));
     const reason = uniqueReason();
     const slot: Slot = { hour: 10 + Math.floor(Math.random() * 6), minute: '45' };
 
@@ -290,7 +309,7 @@ test.describe('Afspraak aanvragen', () => {
       void dialog.dismiss();
     });
 
-    const date = nextWorkday(new Date());
+    const date = nextScheduledWorkday(new Date(), await defaultConsultantWorkdays(page));
     const id = uniqueReason('XSS');
     const reason = `<script>alert(1)</script> '; DROP TABLE afspraken;-- ${id}`;
 
@@ -304,8 +323,8 @@ test.describe('Afspraak aanvragen', () => {
     expect(dialogSeen).toBe(false);
   });
 
-  test('TC-10b: tekst boven de maximumlengte (200) wordt afgekapt en breekt de agenda niet', async () => {
-    const date = nextWorkday(new Date());
+  test('TC-10b: tekst boven de maximumlengte (200) wordt afgekapt en breekt de agenda niet', async ({ page }) => {
+    const date = nextScheduledWorkday(new Date(), await defaultConsultantWorkdays(page));
     const id = uniqueReason('Lang');
     const typed = `${id} ${'x'.repeat(CONFIG.notesMaxLength + 50)}`; // ruim boven de limiet, zonder spaties
     const expected = typed.slice(0, CONFIG.notesMaxLength);

@@ -7,13 +7,13 @@ import { LoginPage } from './pages/login-page';
 const CONFIG = {
   loginUrl: '/login', // URL van de loginpagina
   successUrl: /\/dashboard$/, // URL na succesvolle login
-  validUser: { username: process.env.TEST_USER ?? 'testuser', password: process.env.TEST_PASS ?? 'Test1234!' },
   consultantUser: process.env.E2E_CONSULTANT_USERNAME && process.env.E2E_CONSULTANT_PASSWORD
     ? { username: process.env.E2E_CONSULTANT_USERNAME, password: process.env.E2E_CONSULTANT_PASSWORD }
     : undefined,
-  clientUser: process.env.E2E_CLIENT_USERNAME && process.env.E2E_CLIENT_PASSWORD
-    ? { username: process.env.E2E_CLIENT_USERNAME, password: process.env.E2E_CLIENT_PASSWORD }
-    : undefined,
+  clientUser: {
+    username: process.env.E2E_CLIENT_USERNAME ?? 'testuser',
+    password: process.env.E2E_CLIENT_PASSWORD ?? 'Test1234!',
+  },
   // Optioneel: gebruiker met speciale tekens in wachtwoord (TC-10)
   specialUser: process.env.SPECIAL_USER
     ? { username: process.env.SPECIAL_USER, password: process.env.SPECIAL_PASS ?? 'P@ss!#€%&' }
@@ -26,7 +26,7 @@ const CONFIG = {
 };
 
 test.describe('Loginpagina - functionele testcases', () => {
-  let login: LoginPage; 
+  let login: LoginPage;
 
   test.beforeEach(async ({ page }) => {
     login = new LoginPage(page);
@@ -36,12 +36,12 @@ test.describe('Loginpagina - functionele testcases', () => {
   /* ---------------------------- POSITIEF --------------------------- */
 
   test('TC-01: succesvol inloggen met geldige gegevens', async () => {
-    await login.login(CONFIG.validUser.username, CONFIG.validUser.password);
+    await login.login(CONFIG.clientUser.username, CONFIG.clientUser.password);
     await login.expectLoggedIn();
   });
 
   test('TC-02: inloggen met Enter-toets', async () => {
-    await login.fillCredentials(CONFIG.validUser.username, CONFIG.validUser.password);
+    await login.fillCredentials(CONFIG.clientUser.username, CONFIG.clientUser.password);
     await login.password.press('Enter');
     await login.expectLoggedIn();
   });
@@ -52,11 +52,11 @@ test.describe('Loginpagina - functionele testcases', () => {
   });
 
   test('TC-04: inloggen na eerder mislukte poging', async () => {
-    await login.login(CONFIG.validUser.username, 'FoutWachtwoord!1');
+    await login.login(CONFIG.clientUser.username, 'FoutWachtwoord!1');
     await expect(login.error).toBeVisible();
 
-    await login.password.fill(CONFIG.validUser.password);
-    await login.username.fill(CONFIG.validUser.username);
+    await login.password.fill(CONFIG.clientUser.password);
+    await login.username.fill(CONFIG.clientUser.username);
     await login.signIn.click();
 
     await login.expectLoggedIn();
@@ -65,14 +65,14 @@ test.describe('Loginpagina - functionele testcases', () => {
   /* ---------------------------- NEGATIEF --------------------------- */
 
   test('TC-05: verkeerd wachtwoord', async () => {
-    await login.login(CONFIG.validUser.username, 'FoutWachtwoord!1');
+    await login.login(CONFIG.clientUser.username, 'FoutWachtwoord!1');
     await expect(login.error).toContainText(CONFIG.genericError);
     await login.expectNotLoggedIn();
   });
 
   test('TC-06: onbekende gebruikersnaam geeft dezelfde generieke melding', async ({ page }) => {
     // Referentie: melding bij bestaande gebruiker + fout wachtwoord
-    await login.login(CONFIG.validUser.username, 'FoutWachtwoord!1');
+    await login.login(CONFIG.clientUser.username, 'FoutWachtwoord!1');
     await expect(login.error).toBeVisible();
     const knownUserMessage = (await login.error.innerText()).trim();
 
@@ -93,7 +93,7 @@ test.describe('Loginpagina - functionele testcases', () => {
   });
 
   test('TC-08: alleen wachtwoord leeg', async () => {
-    await login.username.fill(CONFIG.validUser.username);
+    await login.username.fill(CONFIG.clientUser.username);
     await login.signIn.click();
     await login.expectRequiredValidation(login.password);
     await login.expectNotLoggedIn();

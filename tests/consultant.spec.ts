@@ -1,9 +1,31 @@
-const { test, expect } = require("@playwright/test");
+import { test, expect, type Page, type Locator } from '@playwright/test';
 
-async function loginAsConsultant(page) {
+type Consultant = {
+  werkdagen: string | null;
+};
+
+type AppointmentData = {
+  clientSelect: Locator;
+  clientName: string;
+  dateValue: string;
+  notes: string;
+  werkdagen: string;
+};
+
+type CreatedAppointment = {
+  id: string;
+  client: string;
+  clientUsername: string;
+  date: string;
+  start: string;
+  notes: string;
+};
+
+async function loginAsConsultant(page: Page): Promise<void> {
   const username = process.env.E2E_CONSULTANT_USERNAME;
   const password = process.env.E2E_CONSULTANT_PASSWORD;
-  test.skip(!username || !password, "Set E2E_CONSULTANT_USERNAME and E2E_CONSULTANT_PASSWORD to run this test.");
+  test.skip(!username || !password, "Stel E2E_CONSULTANT_USERNAME en E2E_CONSULTANT_PASSWORD in om deze test uit te voeren.");
+  if (!username || !password) throw new Error("Consultant credentials are required.");
 
   await page.goto("/login");
   await page.locator("#username").fill(username);
@@ -12,37 +34,36 @@ async function loginAsConsultant(page) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
-async function getAppointmentData(page) {
+async function getAppointmentData(page: Page): Promise<AppointmentData> {
   const clientSelect = page.locator("#appointment-client");
   await expect(clientSelect).toBeEnabled();
   await expect(clientSelect.locator("option").nth(1)).toBeAttached();
-  const clientName = (await clientSelect.locator("option").nth(1).textContent()).trim();
+  const clientName = (await clientSelect.locator("option").nth(1).textContent())?.trim();
+  if (!clientName) throw new Error("No client is available for the appointment test.");
   const consultantResponse = await page.request.get(new URL("/api/consultant", page.url()).toString());
   expect(consultantResponse.ok()).toBeTruthy();
-  const consultant = await consultantResponse.json();
-  test.skip(!consultant.werkdagen, "The consultant has no configured workdays.");
+  const consultant = await consultantResponse.json() as Consultant;
+  const werkdagen = String(consultant.werkdagen || "");
+  test.skip(!werkdagen, "Voor deze consultant zijn geen werkdagen ingesteld.");
+  if (!werkdagen) throw new Error("Consultant workdays are required.");
 
   const appointmentDate = new Date();
   appointmentDate.setDate(appointmentDate.getDate() + 1);
   const weekdayNames = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
-  while (!String(consultant.werkdagen || "").includes(weekdayNames[appointmentDate.getDay()])) {
+  while (!werkdagen.includes(weekdayNames[appointmentDate.getDay()])) {
     appointmentDate.setDate(appointmentDate.getDate() + 1);
   }
   const dateValue = [appointmentDate.getFullYear(), String(appointmentDate.getMonth() + 1).padStart(2, "0"), String(appointmentDate.getDate()).padStart(2, "0")].join("-");
   const notes = `Playwright appointment ${Date.now()}`;
 
-  return { clientSelect, clientName, dateValue, notes, werkdagen: consultant.werkdagen };
+  return { clientSelect, clientName, dateValue, notes, werkdagen };
 }
 
-function formatDate(date) {
+function formatDate(date: Date): string {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
-async function selectDateRange(dateInput, start, end = start) {
-  await dateInput.evaluate((input, selection) => input.setSelectionRange(selection.start, selection.end), { start, end });
-}
-
-async function deleteAppointment(page, id) {
+async function deleteAppointment(page: Page, id: string): Promise<void> {
   const response = await page.request.delete(new URL(`/api/appointments/${id}`, page.url()).toString());
   expect(response.status()).toBe(204);
 }
@@ -51,7 +72,7 @@ test.beforeEach(async ({ page }) => {
   await loginAsConsultant(page);
 });
 
-test("consultant can log in and see their full name", async ({ page }) => {
+test("TC-01: consultant kan inloggen en de volledige naam en locatie zien", async ({ page }) => {
   const response = await page.request.get(new URL("/api/consultant", page.url()).toString());
   expect(response.ok()).toBeTruthy();
   const consultant = await response.json();
@@ -63,7 +84,7 @@ test("consultant can log in and see their full name", async ({ page }) => {
   await expect(page.locator("#consultant-location")).toHaveText(`Locatie: ${consultant.locationName}`);
 });
 
-test("consultant can open the settings page", async ({ page }) => {
+test("TC-02: consultant kan instellingen bekijken en werkdagen wijzigen", async ({ page }) => {
   await expect(page.locator("#settings-button")).toBeVisible();
   await page.locator("#settings-button").click();
 
@@ -99,7 +120,7 @@ test("consultant can open the settings page", async ({ page }) => {
   }
 });
 
-test("consultant can add an appointment on a workday (ma-vr", async ({ page }) => {
+test("TC-03: consultant kan een afspraak inplannen op een werkdag", async ({ page }) => {
   const { clientSelect, clientName, dateValue, notes } = await getAppointmentData(page);
   const datePicker = page.locator("#appointment-date-picker");
   await datePicker.click();
@@ -125,7 +146,7 @@ test("consultant can add an appointment on a workday (ma-vr", async ({ page }) =
   await page.getByRole("button", { name: "Afspraak opslaan" }).click();
   const response = await createResponse;
   expect(response.status()).toBe(201);
-  const appointment = await response.json();
+  const appointment = await response.json() as CreatedAppointment;
 
   try {
     expect(appointment.client).toBe(clientName);
@@ -138,7 +159,7 @@ test("consultant can add an appointment on a workday (ma-vr", async ({ page }) =
   }
 });
 
-test("consultant sees an error for a past date", async ({ page }) => {
+test("TC-04: het formulier toont een foutmelding bij een datum in het verleden", async ({ page }) => {
   await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
   const yesterday = new Date();
@@ -154,7 +175,7 @@ test("consultant sees an error for a past date", async ({ page }) => {
 
 });
 
-test("consultant sees an error when entering invalid date", async ({ page }) => {
+test("TC-05: het formulier weigert een ongeldige datum", async ({ page }) => {
   await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
   const formattedDate = '48022030'
@@ -165,7 +186,7 @@ test("consultant sees an error when entering invalid date", async ({ page }) => 
 
 });
 
-test("consultant sees an error for a non-workday", async ({ page }) => {
+test("TC-06: een niet-ingeroosterde dag is niet beschikbaar als afspraakdatum", async ({ page }) => {
   const { clientName, werkdagen } = await getAppointmentData(page);
   const dateInput = page.locator("#appointment-date");
   const datePicker = page.locator("#appointment-date-picker");
@@ -197,7 +218,7 @@ test("consultant sees an error for a non-workday", async ({ page }) => {
   await expect(page.locator("#appointment-date-error")).toHaveText(`consultant niet aanwezig op ${unavailableDay}-${unavailableMonth}-${unavailableYear}`);
 });
 
-test("consultant cannot create an appointment in the past", async ({ page }) => {
+test("TC-07: de API weigert een afspraak met een datum in het verleden", async ({ page }) => {
   const { clientName } = await getAppointmentData(page);
   const pastDate = new Date();
   pastDate.setDate(pastDate.getDate() - 1);
@@ -209,29 +230,29 @@ test("consultant cannot create an appointment in the past", async ({ page }) => 
   expect(await response.json()).toEqual({ error: "Afspraken in het verleden zijn niet toegestaan." });
 });
 
-test("consultant can see an appointment in the agenda", async ({ page }) => {
+test("TC-08: een ingeplande afspraak wordt zichtbaar in de agenda", async ({ page }) => {
   const { clientName, dateValue, notes } = await getAppointmentData(page);
   const createResponse = await page.request.post(new URL("/api/appointments", page.url()).toString(), {
     data: { date: dateValue, client: clientName, start: "10:15", durationMinutes: 30, notes },
   });
   expect(createResponse.status()).toBe(201);
-  const appointment = await createResponse.json();
+  const appointment = await createResponse.json() as CreatedAppointment;
 
   try {
     await page.reload();
     const clientFilter = page.locator("#agenda-client-filter option");
     const normalizedClientName = clientName.trim().toLocaleLowerCase("nl-NL");
     await expect.poll(() => clientFilter.evaluateAll((options) =>
-      options.map((option) => option.value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
+      options.map((option) => (option as HTMLOptionElement).value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
     )).toContain(normalizedClientName);
     const clientFilterValues = await clientFilter.evaluateAll((options) =>
-      options.map((option) => option.value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
+      options.map((option) => (option as HTMLOptionElement).value.trim().toLocaleLowerCase("nl-NL")).filter(Boolean),
     );
     expect(new Set(clientFilterValues).size).toBe(clientFilterValues.length);
     expect(clientFilterValues).toContain(normalizedClientName);
     const today = new Date();
     const appointmentDate = new Date(`${dateValue}T00:00:00`);
-    const monday = (date) => {
+    const monday = (date: Date): Date => {
       const weekStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
       return weekStart;

@@ -76,6 +76,64 @@ VALUES (
   'CIConsultant2026!'
 );
 
+INSERT INTO consultant (
+  achternaam,
+  email,
+  functie,
+  telefoonnummer,
+  defaultlocatie,
+  werkdagen,
+  start_werkdag,
+  einde_werkdag,
+  start_pauze,
+  voornaam,
+  username,
+  password
+)
+VALUES (
+  'Collega',
+  'ci-consultant@example.ta',
+  'Huisarts',
+  '020-0000001',
+  9000,
+  'MaDiWoVr',
+  '09:00',
+  '17:00',
+  '12:00',
+  'Peer',
+  'ci-consultant',
+  'CIConsultant2026!'
+);
+
+INSERT INTO consultant (
+  achternaam,
+  email,
+  functie,
+  telefoonnummer,
+  defaultlocatie,
+  werkdagen,
+  start_werkdag,
+  einde_werkdag,
+  start_pauze,
+  voornaam,
+  username,
+  password
+)
+VALUES (
+  'beheerder',
+  'ci-beheerder@example.ta',
+  'beheerder',
+  '020-0000001',
+  9000,
+  'MaDiDoVr',
+  '09:00',
+  '17:00',
+  '12:00',
+  'Peer',
+  'ci-beheerder',
+  'CIBeheerder2026!'
+);
+
 INSERT INTO klanten (
   voornaam,
   achternaam,
