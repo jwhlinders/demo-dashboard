@@ -62,8 +62,8 @@ INSERT INTO consultant (
   password
 )
 VALUES (
-  'Consultant',
-  'ci-consultant@example.invalid',
+  'Beheerder',
+  'ci-beheerder@example.invalid',
   'Beheerder',
   '020-0000000',
   9000,
@@ -72,6 +72,35 @@ VALUES (
   '17:00',
   '12:00',
   'CI',
+  'ci-beheerder',
+  'CIBeheerder2026!'
+);
+
+INSERT INTO consultant (
+  achternaam,
+  email,
+  functie,
+  telefoonnummer,
+  defaultlocatie,
+  werkdagen,
+  start_werkdag,
+  einde_werkdag,
+  start_pauze,
+  voornaam,
+  username,
+  password
+)
+VALUES (
+  'Collega',
+  'ci-consultant@example.invalid',
+  'Huisarts',
+  '020-0000001',
+  9000,
+  'MaDiWoVr',
+  '09:00',
+  '17:00',
+  '12:00',
+  'Peer',
   'ci-consultant',
   'CIConsultant2026!'
 );
@@ -86,11 +115,30 @@ INSERT INTO klanten (
   fullname
 )
 VALUES (
-  'Test',
+  'ATest',
   'Client',
-  'ci-client@example.invalid',
+  'ci-clienta@example.invalid',
   '020-0000000',
-  'ci-client',
+  'ci-clienta',
   'scrypt$00112233445566778899aabbccddeeff$2e603a5b53be29d744d4dfb5052a74f5521c0e390df23e7cf9980d073a1f14751f9b6b47ecd8977d799ab9a1623f42ab0ab6cbe39151656ae912598d943485d8',
-  'Test Client'
+  'ATest Client'
+);
+
+INSERT INTO klanten (
+  voornaam,
+  achternaam,
+  email,
+  telefoonnummer,
+  username,
+  password,
+  fullname
+)
+VALUES (
+  'BTest',
+  'Client',
+  'ci-clientb@example.invalid',
+  '020-0000000',
+  'ci-clientb',
+  'scrypt$00112233445566778899aabbccddeeff$2e603a5b53be29d744d4dfb5052a74f5521c0e390df23e7cf9980d073a1f14751f9b6b47ecd8977d799ab9a1623f42ab0ab6cbe39151656ae912598d943485d8',
+  'BTest Client'
 );

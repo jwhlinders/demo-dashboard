@@ -520,9 +520,7 @@ app.get("/api/consultant/password-reset-requests", async (request, response, nex
                NULLIF(CONCAT_WS(' ', consultant.voornaam, NULLIF(consultant.tussenvoegsel, ''), consultant.achternaam), '')
              ) AS name,
              COALESCE(client.telefoonnummer, consultant.telefoonnummer, '') AS telefoonnummer,
-             CASE WHEN $1::boolean THEN
-               CASE WHEN consultant.username IS NOT NULL THEN 'consultant' ELSE 'client' END
-             END AS "accountType",
+             CASE WHEN consultant.username IS NOT NULL THEN 'consultant' ELSE 'client' END AS "accountType",
              request.status,
              request.created_at AS "createdAt"
       FROM password_reset_requests AS request
