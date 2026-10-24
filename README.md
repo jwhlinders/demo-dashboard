@@ -31,10 +31,10 @@ Voor cliënten zonder account maakt de server automatisch een gebruikersnaam op 
 
 ## End-to-endtest
 
-Installeer de Playwright-browser eenmalig met `npx playwright install chromium`. Stel daarna `E2E_CONSULTANT_USERNAME` en `E2E_CONSULTANT_PASSWORD` in voor een consultantaccount in `.env` of de shell. De database moet ten minste één cliënt bevatten. Voer de test uit met `npm run test:e2e`; Playwright start de app met de bestaande `.env`-configuratie.
+Installeer de Playwright-browser eenmalig met `npx playwright install chromium`. Stel `E2E_BEHEERDER_USERNAME` en `E2E_BEHEERDER_PASSWORD` in voor een beheerderaccount, `E2E_CONSULTANT_USERNAME` en `E2E_CONSULTANT_PASSWORD` voor een gewone consultant en `E2E_CLIENT_USERNAME` voor een cliëntaccount in `.env` of de shell. De database moet deze accounts bevatten. Voer de test uit met `npm run test:e2e`; Playwright start de app met de bestaande `.env`-configuratie. De instellingenintegratietest voegt tijdelijk aanvragen toe voor de cliënt en de gewone consultant. Beheerders kunnen beide zien en afhandelen; gewone consultants alleen cliëntaanvragen. De test verwijdert achteraf alleen de eigen records; voer de tests uitsluitend uit tegen een testdatabase.
 
 ## GitHub Actions
 
 De workflow `.github/workflows/playwright.yml` voert de Playwright-tests alleen uit wanneer je die handmatig start via GitHub **Actions > Playwright tests > Run workflow**. Kies de branch en start de workflow. Deze gebruikt een tijdelijke PostgreSQL-service, initialiseert die met `tests/fixtures/ci-schema.sql` en draait de tests sequentieel. Na afloop vind je onderaan de workflowrun het artefact `playwright-report`. Download en pak het uit en open `index.html` om het HTML-testrapport te bekijken. Het artefact wordt zeven dagen bewaard.
 
-Stel de E2E-variabelen in op de accountgegevens uit dit fixture: `E2E_CONSULTANT_USERNAME=ci-consultant`, `E2E_CONSULTANT_PASSWORD=CIConsultant2026!`, `E2E_CLIENT_USERNAME=ci-client` en `E2E_CLIENT_PASSWORD=CIClient2026!`. Deze vaste gegevens zijn uitsluitend voor de wegwerpdatabase van CI; gebruik ze niet buiten tests.
+Stel de E2E-variabelen in op de accountgegevens uit dit fixture: `E2E_BEHEERDER_USERNAME=ci-consultant`, `E2E_BEHEERDER_PASSWORD=CIConsultant2026!`, `E2E_CONSULTANT_USERNAME=ci-consultant-peer`, `E2E_CONSULTANT_PASSWORD=CIConsultant2026!`, `E2E_CLIENT_USERNAME=ci-client` en `E2E_CLIENT_PASSWORD=CIClient2026!`. Deze vaste gegevens zijn uitsluitend voor de wegwerpdatabase van CI; gebruik ze niet buiten tests.

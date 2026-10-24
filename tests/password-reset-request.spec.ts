@@ -1,6 +1,6 @@
-const { test, expect } = require("@playwright/test");
+import { test, expect, type Page, type Locator } from '@playwright/test';
 
-test("hides the submit button after displaying the tracking code", async ({ page }) => {
+test("TC01: hides the submit button after displaying the tracking code", async ({ page }) => {
   await page.route("**/api/password-reset-requests", (route) => route.fulfill({
     status: 201,
     contentType: "application/json",
@@ -21,7 +21,7 @@ test("hides the submit button after displaying the tracking code", async ({ page
   await expect(page.getByRole("button", { name: "Aanvraag versturen" })).toBeHidden();
 });
 
-test("shows an informational message and keeps the button after a recent request", async ({ page }) => {
+test("TC02: shows an informational message and keeps the button after a recent request", async ({ page }) => {
   await page.route("**/api/password-reset-requests", (route) => route.fulfill({
     contentType: "application/json",
     body: JSON.stringify({
