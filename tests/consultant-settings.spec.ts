@@ -4,7 +4,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const CONFIG = {
   clientUsername: process.env.E2E_CLIENT_USERNAME,
-  anotherClientUsername: "mboer", // This is a hardcoded username for testing purposes
+  anotherClientUsername: process.env.E2E_2ND_CLIENT_USERNAME,
   beheerder: {
     username: process.env.E2E_BEHEERDER_USERNAME,
     password: process.env.E2E_BEHEERDER_PASSWORD,
