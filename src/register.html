@@ -37,20 +37,85 @@
           </label>
         </div>
         <p class="login-error" id="register-error" role="alert" hidden></p>
-        <p class="register-success" id="register-success" role="status" hidden></p>
         <button class="primary-button" type="submit">Account aanmaken</button>
       </form>
       <p class="login-copy register-prompt">Heb je al een account? <a href="/login">Terug naar inloggen</a>.</p>
     </section>
   </main>
+  <dialog class="profile-dialog register-confirmation-dialog" id="register-confirmation-dialog" aria-labelledby="register-confirmation-title">
+    <div class="register-confirmation-content">
+      <div class="profile-heading">
+        <div>
+          <p class="eyebrow">Account aangemaakt</p>
+          <h2 id="register-confirmation-title">Je account is aangemaakt</h2>
+        </div>
+      </div>
+      <p class="login-copy">Bewaar je accountgegevens. Je hebt ze nodig om in te loggen.</p>
+      <label class="field" for="created-username">
+        <span>Accountnaam</span>
+        <input id="created-username" type="text" readonly aria-readonly="true">
+      </label>
+      <label class="field" for="created-password">
+        <span>Tijdelijk wachtwoord</span>
+        <input id="created-password" type="text" readonly aria-readonly="true">
+      </label>
+      <div class="profile-actions register-confirmation-actions">
+        <button class="primary-button" id="register-confirmation-ok" type="button">OK</button>
+      </div>
+    </div>
+  </dialog>
   <script>
+    const capitalizeInitial = (input) => {
+      const firstCharacter = Array.from(input.value)[0];
+      if (!firstCharacter) return;
+
+      const uppercaseFirstCharacter = firstCharacter.toLocaleUpperCase("nl-NL");
+      if (firstCharacter === uppercaseFirstCharacter) return;
+
+      const selectionStart = input.selectionStart;
+      const selectionEnd = input.selectionEnd;
+      input.value = uppercaseFirstCharacter + input.value.slice(firstCharacter.length);
+      if (selectionStart !== null && selectionEnd !== null) {
+        const lengthDifference = uppercaseFirstCharacter.length - firstCharacter.length;
+        input.setSelectionRange(
+          selectionStart >= firstCharacter.length ? selectionStart + lengthDifference : selectionStart,
+          selectionEnd >= firstCharacter.length ? selectionEnd + lengthDifference : selectionEnd,
+        );
+      }
+    };
+
+    for (const fieldId of ["#first-name", "#last-name"]) {
+      document.querySelector(fieldId).addEventListener("input", (event) => capitalizeInitial(event.currentTarget));
+    }
+
+    const firstNameInput = document.querySelector("#first-name");
+    const lastNameInput = document.querySelector("#last-name");
+    const emailInput = document.querySelector("#email");
+    let suggestedEmail = "";
+    const updateEmailSuggestion = () => {
+      if (emailInput.value && emailInput.value !== suggestedEmail) return;
+
+      const firstName = firstNameInput.value.trim().replace(/\s+/g, "").toLocaleLowerCase("nl-NL");
+      const lastName = lastNameInput.value.trim().replace(/\s+/g, "").toLocaleLowerCase("nl-NL");
+      suggestedEmail = firstName && lastName ? `${firstName}.${lastName}@dashboard.nl` : "";
+      emailInput.value = suggestedEmail;
+    };
+
+    firstNameInput.addEventListener("input", updateEmailSuggestion);
+    lastNameInput.addEventListener("input", updateEmailSuggestion);
+
+    const confirmationDialog = document.querySelector("#register-confirmation-dialog");
+    confirmationDialog.addEventListener("cancel", (event) => event.preventDefault());
+    document.querySelector("#register-confirmation-ok").addEventListener("click", () => {
+      confirmationDialog.close();
+      window.location.href = "/login";
+    });
+
     document.querySelector("#register-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
       const error = document.querySelector("#register-error");
-      const success = document.querySelector("#register-success");
       error.hidden = true;
-      success.hidden = true;
       try {
         const response = await fetch("/api/register", {
           method: "POST",
@@ -59,9 +124,9 @@
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Registreren is mislukt.");
-        form.reset();
-        success.textContent = `Je account is aangemaakt. Gebruikersnaam: ${result.username}. Tijdelijk wachtwoord: ${result.password}.`;
-        success.hidden = false;
+        document.querySelector("#created-username").value = result.username;
+        document.querySelector("#created-password").value = result.password;
+        confirmationDialog.showModal();
       } catch (submitError) {
         error.textContent = submitError.message || "Registreren is mislukt. Controleer je verbinding.";
         error.hidden = false;

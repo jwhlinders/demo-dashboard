@@ -673,6 +673,34 @@ body {
   padding: 0 14px;
 }
 
+.register-confirmation-content {
+  display: grid;
+  gap: 12px;
+}
+
+.register-confirmation-content .profile-heading {
+  margin-bottom: 0;
+}
+
+.register-confirmation-content .login-copy {
+  margin: 0;
+}
+
+.register-confirmation-content .field {
+  gap: 4px;
+}
+
+.register-confirmation-content input[readonly] {
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #f4f6f3;
+}
+
+.register-confirmation-actions {
+  margin-top: 4px;
+}
+
 .profile-message {
   margin: 0;
   color: #a14430;
