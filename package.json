@@ -4,18 +4,26 @@
   "private": true,
   "scripts": {
     "start": "node --env-file=.env src/server.js",
+    
+    "pretest:e2e": "rimraf allure-results",
     "test:e2e": "npx kill-port 3100 && playwright test",
     "testdata:locaties": "node --env-file=.env src/testdata.js",
     "testdata:consultants": "node --env-file=.env src/testdata-consultants.js",
-    "testdata:klanten": "node --env-file=.env src/testdata-klanten.js"
+    "testdata:klanten": "node --env-file=.env src/testdata-klanten.js",
+    "report:management": "allure generate my-allure-results --single-file --clean -o management-rapport",
+    "test:e2e:report": "npm run test:e2e && npm run report:management"
   },
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.16.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
-    "kill-port": "^2.0.1"
+    "allure": "^0.0.0",
+    "allure-commandline": "^2.46.1",
+    "allure-playwright": "^3.14.0",
+    "kill-port": "^2.0.1",
+    "rimraf": "^4.4.1"
   }
 }
