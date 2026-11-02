@@ -10,7 +10,7 @@
     "testdata:locaties": "node --env-file=.env src/testdata.js",
     "testdata:consultants": "node --env-file=.env src/testdata-consultants.js",
     "testdata:klanten": "node --env-file=.env src/testdata-klanten.js",
-    "report:management": "allure generate my-allure-results --single-file --clean -o management-rapport",
+    "report:management": "allure generate allure-results --single-file --clean -o management-rapport",
     "test:e2e:report": "npm run test:e2e && npm run report:management"
   },
   "dependencies": {
