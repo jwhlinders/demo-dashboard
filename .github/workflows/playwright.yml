@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
@@ -58,12 +58,34 @@ jobs:
       - name: Initialize test database
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/ci-schema.sql
 
+      # 1. Draai de testen via je nieuwe script (zodat de Allure-data wordt verzameld)
       - name: Run Playwright tests
-        run: npm run test:e2e -- --workers=1 --reporter=html,list
+        run: npm run test:e2e -- --workers=1
 
+      # 2. Installeer de Allure CLI in de Ubuntu-omgeving van GitHub
+      - name: Set up Allure
+        if: always()
+        run: npm install -g allure-commandline
+
+      # 3. Bouw het single-file management rapport
+      - name: Generate Allure Report
+        if: always()
+        run: npm run report:management
+
+      # 4. Upload het kant-en-klare HTML-rapport naar GitHub zodat je het kunt downloaden
+      - name: Upload Allure Management Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: management-rapport
+          path: management-rapport/
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Je oude HTML-report stap mag blijven staan als back-up, of je kunt deze weghalen
       - name: Upload Playwright HTML report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report/
