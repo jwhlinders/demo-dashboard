@@ -58,21 +58,22 @@ jobs:
       - name: Initialize test database
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/ci-schema.sql
 
-      # 1. Draai de testen via je nieuwe script (zodat de Allure-data wordt verzameld)
-      - name: Run Playwright tests
-        run: npm run test:e2e -- --workers=1
+  # 1. Draai Playwright direct aan met de juiste map en workers
+      # (NPM runt automatisch de pretest:e2e stap nog steeds om op te schonen!)
+       bondage-name: Run Playwright tests
+       run: npx playwright test --workers=1
 
-      # 2. Installeer de Allure CLI in de Ubuntu-omgeving van GitHub
+      # 2. Installeer de Allure CLI op de GitHub runner
       - name: Set up Allure
         if: always()
         run: npm install -g allure-commandline
 
-      # 3. Bouw het single-file management rapport
+      # 3. Bouw het single-file management rapport via jouw script
       - name: Generate Allure Report
         if: always()
         run: npm run report:management
 
-      # 4. Upload het kant-en-klare HTML-rapport naar GitHub zodat je het kunt downloaden
+      # 4. Upload het kant-en-klare HTML-rapport
       - name: Upload Allure Management Report
         if: always()
         uses: actions/upload-artifact@v4
