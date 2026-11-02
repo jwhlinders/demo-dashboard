@@ -8,6 +8,11 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`;
 
 module.exports = defineConfig({
   testDir: "./tests",
+  
+  reporter: [
+    ["line"], 
+    ["allure-playwright", { resultsDir: "allure-results" }]
+  ],
   use: {
     baseURL,
     browserName: "chromium",
