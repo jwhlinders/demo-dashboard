@@ -115,6 +115,7 @@ app.post("/api/password-reset-requests", async (request, response, next) => {
       FROM password_reset_requests
       WHERE LOWER(client_username) = LOWER($1)
         AND created_at > NOW() - INTERVAL '5 minutes'
+        AND password_changed_at IS NULL
       LIMIT 1
     `, [username]);
     if (recentRequest.rowCount > 0) {
