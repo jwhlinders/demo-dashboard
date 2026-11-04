@@ -129,6 +129,17 @@ body {
   justify-self: start;
 }
 
+.login-panel #reset-request-form > .secondary-button {
+  grid-column: 2;
+  width: 100%;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  text-decoration: none;
+}
+
 .login-panel #password-form {
   display: grid;
   grid-template-columns: 112px minmax(0, 20ch);
