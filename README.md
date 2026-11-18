@@ -11,7 +11,7 @@ De applicatiecode en webbestanden staan in `src/`. Playwright-tests en testfixtu
 4. Start de app met `npm start`.
 5. Open `http://localhost:3000`.
 
-De server voert bij het opstarten database-migraties uit en maakt de tabel `appointments` automatisch aan. Als `adres` aanwezig is, voegt een migratie de kolommen `postcode` en `woonplaats` toe. De adresverwijzing loopt via `klanten.idadres` en `consultant.idadres`, die verwijzen naar `adres.idadres`. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
+De server voert bij het opstarten database-migraties uit en maakt de tabellen `appointments` en `adres` automatisch aan als die ontbreken. De adresverwijzing loopt via `klanten.idadres` en `consultant.idadres`, die verwijzen naar `adres.idadres`. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
 
 ## Lokale testaccounts
 
