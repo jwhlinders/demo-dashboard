@@ -45,7 +45,7 @@ CREATE TABLE klanten (
 );
 
 INSERT INTO locaties (id, naam, adres, postcode, plaats, telefoonnummer, actief, idlocatie)
-VALUES (1, 'CI testlocatie', 'Teststraat 1', '1234AB', 'Teststad', '020-0000000', B'1', 9000);
+VALUES (1, 'CI testlocatie', 'Teststraat 1', '1234AB', 'Teststad', '020-0000000', B'1', 1);
 
 INSERT INTO consultant (
   achternaam,
@@ -66,7 +66,7 @@ VALUES (
   'ci-beheerder@example.invalid',
   'Beheerder',
   '020-0000000',
-  9000,
+  1,
   'MaDiWoDoVr',
   '09:00',
   '17:00',
@@ -95,7 +95,7 @@ VALUES (
   'ci-consultant@example.invalid',
   'Huisarts',
   '020-0000001',
-  9000,
+  1,
   'MaDiWoVr',
   '09:00',
   '17:00',
