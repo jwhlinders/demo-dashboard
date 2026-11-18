@@ -32,9 +32,10 @@
     <section class="settings-panel" aria-labelledby="settings-title">
       <div class="settings-topbar">
         <div class="settings-heading">
-          <p class="eyebrow">Accountgegevens</p>
+          <p class="eyebrow" id="settings-eyebrow">Accountgegevens</p>
           <h1 id="settings-title">Instellingen</h1>
         </div>
+        <button class="secondary-button" id="add-consultant-button" type="button" hidden>Nieuw consultant</button>
       </div>
 
       <form class="settings-form" id="settings-form">
@@ -43,10 +44,19 @@
           <div class="settings-stack">
             <div class="field-row field-row-name">
               <span class="field-label">Naam</span>
-              <div class="field-inline-grid no-sub-labels">
-                <input id="setting-first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" aria-label="Voornaam">
-                <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="80" aria-label="Tussenvoegsel">
-                <input id="setting-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" aria-label="Achternaam">
+              <div class="field-inline-grid">
+                <div class="subfield">
+                  <label for="setting-first-name">Voornaam</label>
+                  <input id="setting-first-name" name="voornaam" type="text" maxlength="20" autocomplete="given-name">
+                </div>
+                <div class="subfield">
+                  <label for="setting-prefix">Tussenvoegsel</label>
+                  <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="20">
+                </div>
+                <div class="subfield">
+                  <label for="setting-last-name">Achternaam</label>
+                  <input id="setting-last-name" name="achternaam" type="text" maxlength="40" autocomplete="family-name">
+                </div>
               </div>
             </div>
 
@@ -58,6 +68,36 @@
             <div class="field-row">
               <label class="field-label" for="setting-phone">Telefoonnummer</label>
               <input id="setting-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
+            </div>
+
+            <div class="field-row" id="setting-username-row" hidden>
+              <label class="field-label" for="setting-username">Gebruikersnaam</label>
+              <input id="setting-username" name="username" type="text" maxlength="80" autocomplete="username">
+            </div>
+
+            <div class="field-row" id="setting-authorisatiecode-row" hidden>
+              <label class="field-label" for="setting-authorisatiecode">Authorisatiecode</label>
+              <input id="setting-authorisatiecode" name="authorisatiecode" type="text" readonly aria-readonly="true" placeholder="Wordt gegenereerd bij opslaan">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="consultant-address-title">
+          <h3 id="consultant-address-title">Adresgegevens</h3>
+          <div class="settings-stack">
+            <div class="field-row">
+              <label class="field-label" for="setting-home-street">Straat</label>
+              <input id="setting-home-street" name="straat" type="text" maxlength="100" autocomplete="street-address">
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-home-postcode">Postcode</label>
+              <input id="setting-home-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" title="Vul een postcode in, bijvoorbeeld 1234 AB." autocomplete="postal-code" autocapitalize="characters">
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-home-city">Woonplaats</label>
+              <input id="setting-home-city" name="woonplaats" type="text" maxlength="50" autocomplete="address-level2">
             </div>
           </div>
         </section>
@@ -132,6 +172,8 @@
         <div class="settings-actions">
           <button class="secondary-button" id="cancel-button" type="button">Annuleren</button>
           <button class="primary-button" type="button" id="save-button">Opslaan</button>
+          <button class="secondary-button" id="add-another-consultant-button" type="button" hidden>Nieuw consultant</button>
+          <button class="primary-button" id="done-adding-consultants-button" type="button" hidden>OK</button>
         </div>
       </form>
       <section class="settings-form" aria-labelledby="password-reset-requests-title">
@@ -149,6 +191,52 @@
   <script>
     const settingsError = document.querySelector("#settings-error");
     let locationsById = new Map();
+    let creatingConsultant = false;
+    let consultantCreated = false;
+
+    function setConsultantFieldsReadOnly(readOnly) {
+      for (const input of document.querySelectorAll("#settings-form input")) {
+        if (input.type === "checkbox") {
+          input.disabled = readOnly;
+        } else if (!["setting-adres", "setting-postcode", "setting-plaats", "setting-authorisatiecode"].includes(input.id)) {
+          input.readOnly = readOnly;
+        }
+      }
+      for (const select of document.querySelectorAll("#settings-form select")) {
+        select.disabled = readOnly;
+      }
+    }
+
+    function setConsultantFormMode(isCreating) {
+      creatingConsultant = isCreating;
+      consultantCreated = false;
+      document.querySelector("#settings-eyebrow").textContent = isCreating ? "Nieuw account" : "Accountgegevens";
+      document.querySelector("#settings-title").textContent = isCreating ? "Nieuw consultant" : "Instellingen";
+      document.querySelector("#add-consultant-button").hidden = isCreating;
+      document.querySelector("#password-reset-requests-title").closest(".settings-form").hidden = isCreating;
+      document.querySelector("#setting-username-row").hidden = !isCreating;
+      document.querySelector("#setting-authorisatiecode-row").hidden = !isCreating;
+      document.querySelector("#setting-username").required = isCreating;
+      for (const fieldId of ["setting-home-street", "setting-home-postcode", "setting-home-city"]) {
+        document.querySelector(`#${fieldId}`).required = isCreating;
+      }
+      const saveButton = document.querySelector("#save-button");
+      saveButton.textContent = isCreating ? "Consultant toevoegen" : "Opslaan";
+      saveButton.disabled = false;
+      document.querySelector("#cancel-button").hidden = false;
+      saveButton.hidden = false;
+      document.querySelector("#add-another-consultant-button").hidden = true;
+      document.querySelector("#done-adding-consultants-button").hidden = true;
+      document.querySelector("#setting-authorisatiecode").value = "";
+      setConsultantFieldsReadOnly(false);
+      if (isCreating) {
+        document.querySelector("#settings-form").reset();
+        document.querySelector("#setting-default-location").value = "";
+        updateLocationDetails();
+      } else {
+        loadConsultantSettings();
+      }
+    }
 
     function updateLocationDetails() {
       const location = locationsById.get(document.querySelector("#setting-default-location").value);
@@ -244,6 +332,9 @@
         if (!locationsResponse.ok) throw new Error(locations.error || "Locaties konden niet worden geladen.");
 
         const consultant = result;
+        const isBeheerder = typeof consultant.functie === "string"
+          && consultant.functie.trim().toLocaleLowerCase("nl-NL") === "beheerder";
+        document.querySelector("#add-consultant-button").hidden = !isBeheerder;
         const fields = {
           voornaam: consultant.voornaam || "",
           tussenvoegsel: consultant.tussenvoegsel || "",
@@ -262,6 +353,9 @@
         document.querySelector("#setting-last-name").value = fields.achternaam;
         document.querySelector("#setting-email").value = fields.email;
         document.querySelector("#setting-phone").value = fields.telefoonnummer;
+        document.querySelector("#setting-home-street").value = consultant.address_street || "";
+        document.querySelector("#setting-home-postcode").value = consultant.address_postcode || "";
+        document.querySelector("#setting-home-city").value = consultant.address_city || "";
         document.querySelector("#setting-role").value = fields.role;
         const locationSelect = document.querySelector("#setting-default-location");
         locationsById = new Map(locations.map((location) => [String(location.id), location]));
@@ -292,10 +386,32 @@
       window.location.href = "/";
     });
     document.querySelector("#cancel-button").addEventListener("click", () => {
-      window.location.href = "/";
+      if (creatingConsultant) {
+        setConsultantFormMode(false);
+        document.querySelector("#settings-status").hidden = true;
+        settingsError.hidden = true;
+      } else {
+        window.location.href = "/";
+      }
+    });
+    document.querySelector("#add-consultant-button").addEventListener("click", () => {
+      setConsultantFormMode(true);
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
+    });
+    document.querySelector("#add-another-consultant-button").addEventListener("click", () => {
+      setConsultantFormMode(true);
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
+    });
+    document.querySelector("#done-adding-consultants-button").addEventListener("click", () => {
+      setConsultantFormMode(false);
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
     });
     document.querySelector("#save-button").addEventListener("click", async (event) => {
       const button = event.currentTarget;
+      if (!document.querySelector("#settings-form").reportValidity()) return;
       const status = document.querySelector("#settings-status");
       settingsError.hidden = true;
       status.hidden = true;
@@ -309,24 +425,42 @@
         const tussenvoegsel = document.querySelector("#setting-prefix").value.trim();
         const achternaam = document.querySelector("#setting-last-name").value.trim();
         const name = [voornaam, tussenvoegsel, achternaam].filter(Boolean).join(" ");
-        const response = await fetch("/api/consultant/settings", {
-          method: "PATCH",
+        const isCreating = creatingConsultant;
+        const requestBody = {
+          voornaam,
+          tussenvoegsel,
+          achternaam,
+          email: document.querySelector("#setting-email").value.trim(),
+          telefoonnummer: document.querySelector("#setting-phone").value.trim(),
+          straat: document.querySelector("#setting-home-street").value.trim(),
+          postcode: document.querySelector("#setting-home-postcode").value.trim(),
+          woonplaats: document.querySelector("#setting-home-city").value.trim(),
+          functie: document.querySelector("#setting-role").value.trim(),
+          start_werkdag: document.querySelector("#setting-start-werkdag").value,
+          einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
+          werkdagen,
+          defaultlocatie: Number(locationSelect.value),
+        };
+        if (isCreating) requestBody.username = document.querySelector("#setting-username").value.trim();
+        const response = await fetch(isCreating ? "/api/consultants" : "/api/consultant/settings", {
+          method: isCreating ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            voornaam,
-            tussenvoegsel,
-            achternaam,
-            email: document.querySelector("#setting-email").value.trim(),
-            telefoonnummer: document.querySelector("#setting-phone").value.trim(),
-            functie: document.querySelector("#setting-role").value.trim(),
-            start_werkdag: document.querySelector("#setting-start-werkdag").value,
-            einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
-            werkdagen,
-            defaultlocatie: Number(locationSelect.value),
-          }),
+          body: JSON.stringify(requestBody),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Instellingen konden niet worden opgeslagen.");
+        if (isCreating) {
+          document.querySelector("#setting-authorisatiecode").value = result.authorisatiecode;
+          consultantCreated = true;
+          setConsultantFieldsReadOnly(true);
+          document.querySelector("#cancel-button").hidden = true;
+          button.hidden = true;
+          document.querySelector("#add-another-consultant-button").hidden = false;
+          document.querySelector("#done-adding-consultants-button").hidden = false;
+          status.textContent = "Consultant is aangemaakt. Bewaar de authorisatiecode.";
+          status.hidden = false;
+          return;
+        }
         const username = document.querySelector("#consultant-name").textContent.match(/\(([^)]+)\)$/)?.[0] || "";
         document.querySelector("#consultant-name").textContent = `${name || "Instellingen"} ${username}`.trim();
         const locationLabel = document.querySelector("#consultant-location");
@@ -334,11 +468,13 @@
         locationLabel.hidden = false;
         status.textContent = "Instellingen zijn opgeslagen.";
         status.hidden = false;
+        const isBeheerder = document.querySelector("#setting-role").value.trim().toLocaleLowerCase("nl-NL") === "beheerder";
+        document.querySelector("#add-consultant-button").hidden = !isBeheerder;
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden opgeslagen.";
         settingsError.hidden = false;
       } finally {
-        button.disabled = false;
+        button.disabled = creatingConsultant && consultantCreated;
       }
     });
     document.querySelector("#logout-button").addEventListener("click", async () => {

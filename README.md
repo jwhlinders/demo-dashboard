@@ -11,7 +11,7 @@ De applicatiecode en webbestanden staan in `src/`. Playwright-tests en testfixtu
 4. Start de app met `npm start`.
 5. Open `http://localhost:3000`.
 
-De server maakt de tabel `appointments` automatisch aan. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
+De server voert bij het opstarten database-migraties uit en maakt de tabel `appointments` automatisch aan. Als `adres` aanwezig is, voegt een migratie de kolommen `postcode` en `woonplaats` toe. De adresverwijzing loopt via `klanten.idadres` en `consultant.idadres`, die verwijzen naar `adres.idadres`. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
 
 ## Lokale testaccounts
 
@@ -21,13 +21,18 @@ Vul een lokale testdatabase eerst met de basistabellen en locaties. Voer daarna 
 npm run testdata:locaties
 npm run testdata:consultants
 npm run testdata:klanten
+npm run testdata:adres
 ```
 
-De scripts voegen fictieve testgegevens toe en zijn veilig opnieuw uit te voeren: bestaande testaccounts worden overgeslagen. Consultants kunnen inloggen met gebruikersnaam `emulder`, `jdekker`, `sverhoeven`, `tvanloon` of `nvisser`; voor deze accounts is het tijdelijke wachtwoord `TestConsultant2026!`. De testklanten gebruiken de gebruikersnamen uit `src/testdata-klanten.js` en het tijdelijke wachtwoord `Welkom01`; zij moeten dit wachtwoord bij de eerste login wijzigen. Gebruik deze scripts en wachtwoorden uitsluitend in een lokale testdatabase, niet in productie.
+De scripts voegen fictieve testgegevens toe en zijn veilig opnieuw uit te voeren: bestaande testaccounts en adreskoppelingen worden overgeslagen. `testdata:adres` maakt voor iedere klant en consultant zonder adres een adresrecord aan met een Nederlandse plaatsnaam. Plaatsnamen van consultants mogen overeenkomen met die van klanten. Consultants kunnen inloggen met gebruikersnaam `emulder`, `jdekker`, `sverhoeven`, `tvanloon` of `nvisser`; voor deze accounts is het tijdelijke wachtwoord `TestConsultant2026!`. De testklanten gebruiken de gebruikersnamen uit `src/testdata-klanten.js` en het tijdelijke wachtwoord `Welkom01`; zij moeten dit wachtwoord bij de eerste login wijzigen. Gebruik deze scripts en wachtwoorden uitsluitend in een lokale testdatabase, niet in productie.
 
 ## Cliëntaccounts
 
 Voor cliënten zonder account maakt de server automatisch een gebruikersnaam op basis van de eerste letter van de voornaam en de achternaam (bijvoorbeeld `jjansen` voor Jan Jansen). Bij dubbele namen wordt een volgnummer toegevoegd. Het tijdelijke wachtwoord is `Welkom01`; cliënten moeten dit na de eerste login wijzigen. Nieuwe registraties krijgen dezelfde accountnaamregel en een tijdelijk wachtwoord.
+
+## Consultantaccounts
+
+Een beheerder kan via **Instellingen > Nieuw consultant** een consultantaccount aanmaken. De applicatie genereert een eenmalige authorisatiecode van acht tekens. De consultant activeert het account via `/consultant` met de gebruikersnaam, authorisatiecode en postcode van de werklocatie, en stelt daarna zelf een wachtwoord in. E-mailverzending van deze gegevens is nog niet ingericht.
 
 ## End-to-endtest
 
