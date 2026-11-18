@@ -44,10 +44,19 @@
           <div class="settings-stack">
             <div class="field-row field-row-name">
               <span class="field-label">Naam</span>
-              <div class="field-inline-grid no-sub-labels">
-                <input id="setting-first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" aria-label="Voornaam">
-                <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="80" aria-label="Tussenvoegsel">
-                <input id="setting-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" aria-label="Achternaam">
+              <div class="field-inline-grid">
+                <div class="subfield">
+                  <label for="setting-first-name">Voornaam</label>
+                  <input id="setting-first-name" name="voornaam" type="text" maxlength="20" autocomplete="given-name">
+                </div>
+                <div class="subfield">
+                  <label for="setting-prefix">Tussenvoegsel</label>
+                  <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="20">
+                </div>
+                <div class="subfield">
+                  <label for="setting-last-name">Achternaam</label>
+                  <input id="setting-last-name" name="achternaam" type="text" maxlength="40" autocomplete="family-name">
+                </div>
               </div>
             </div>
 
@@ -69,6 +78,26 @@
             <div class="field-row" id="setting-authorisatiecode-row" hidden>
               <label class="field-label" for="setting-authorisatiecode">Authorisatiecode</label>
               <input id="setting-authorisatiecode" name="authorisatiecode" type="text" readonly aria-readonly="true" placeholder="Wordt gegenereerd bij opslaan">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="consultant-address-title">
+          <h3 id="consultant-address-title">Adresgegevens</h3>
+          <div class="settings-stack">
+            <div class="field-row">
+              <label class="field-label" for="setting-home-street">Straat</label>
+              <input id="setting-home-street" name="straat" type="text" maxlength="100" autocomplete="street-address">
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-home-postcode">Postcode</label>
+              <input id="setting-home-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" title="Vul een postcode in, bijvoorbeeld 1234 AB." autocomplete="postal-code" autocapitalize="characters">
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-home-city">Woonplaats</label>
+              <input id="setting-home-city" name="woonplaats" type="text" maxlength="50" autocomplete="address-level2">
             </div>
           </div>
         </section>
@@ -188,6 +217,9 @@
       document.querySelector("#setting-username-row").hidden = !isCreating;
       document.querySelector("#setting-authorisatiecode-row").hidden = !isCreating;
       document.querySelector("#setting-username").required = isCreating;
+      for (const fieldId of ["setting-home-street", "setting-home-postcode", "setting-home-city"]) {
+        document.querySelector(`#${fieldId}`).required = isCreating;
+      }
       const saveButton = document.querySelector("#save-button");
       saveButton.textContent = isCreating ? "Consultant toevoegen" : "Opslaan";
       saveButton.disabled = false;
@@ -321,6 +353,9 @@
         document.querySelector("#setting-last-name").value = fields.achternaam;
         document.querySelector("#setting-email").value = fields.email;
         document.querySelector("#setting-phone").value = fields.telefoonnummer;
+        document.querySelector("#setting-home-street").value = consultant.address_street || "";
+        document.querySelector("#setting-home-postcode").value = consultant.address_postcode || "";
+        document.querySelector("#setting-home-city").value = consultant.address_city || "";
         document.querySelector("#setting-role").value = fields.role;
         const locationSelect = document.querySelector("#setting-default-location");
         locationsById = new Map(locations.map((location) => [String(location.id), location]));
@@ -376,6 +411,7 @@
     });
     document.querySelector("#save-button").addEventListener("click", async (event) => {
       const button = event.currentTarget;
+      if (!document.querySelector("#settings-form").reportValidity()) return;
       const status = document.querySelector("#settings-status");
       settingsError.hidden = true;
       status.hidden = true;
@@ -396,6 +432,9 @@
           achternaam,
           email: document.querySelector("#setting-email").value.trim(),
           telefoonnummer: document.querySelector("#setting-phone").value.trim(),
+          straat: document.querySelector("#setting-home-street").value.trim(),
+          postcode: document.querySelector("#setting-home-postcode").value.trim(),
+          woonplaats: document.querySelector("#setting-home-city").value.trim(),
           functie: document.querySelector("#setting-role").value.trim(),
           start_werkdag: document.querySelector("#setting-start-werkdag").value,
           einde_werkdag: document.querySelector("#setting-einde-werkdag").value,

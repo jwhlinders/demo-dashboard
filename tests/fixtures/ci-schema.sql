@@ -145,3 +145,12 @@ VALUES (
   'scrypt$00112233445566778899aabbccddeeff$2e603a5b53be29d744d4dfb5052a74f5521c0e390df23e7cf9980d073a1f14751f9b6b47ecd8977d799ab9a1623f42ab0ab6cbe39151656ae912598d943485d8',
   'BTest Client'
 );
+
+CREATE TABLE adres (
+  idadres INTEGER PRIMARY KEY,
+  straat VARCHAR(100) NOT NULL,
+  idklant INTEGER NOT NULL REFERENCES klanten (id)
+);
+
+INSERT INTO adres (idadres, straat, idklant)
+VALUES (501, 'Teststraat 1', 1), (502, 'Teststraat 2', 2);

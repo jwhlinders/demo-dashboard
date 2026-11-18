@@ -25,6 +25,73 @@ function normalizePostcode(value) {
   return value.trim().replace(/[\s-]/g, "").toUpperCase();
 }
 
+function readConsultantAddress(body) {
+  const rawPostcode = typeof body?.postcode === "string" ? body.postcode.trim() : "";
+  const address = {
+    straat: typeof body?.straat === "string" ? body.straat.trim() : "",
+    postcode: normalizePostcode(rawPostcode),
+    woonplaats: typeof body?.woonplaats === "string" ? body.woonplaats.trim() : "",
+  };
+  return { ...address, provided: Boolean(address.straat || rawPostcode || address.woonplaats) };
+}
+
+function validateConsultantAddress(address, required) {
+  if (!address.provided && !required) return null;
+  if (!address.straat || !address.postcode || !address.woonplaats) {
+    return "Vul straat, postcode en woonplaats in.";
+  }
+  if (address.straat.length > 100) return "De straat mag maximaal 100 tekens bevatten.";
+  if (!/^\d{4}[A-Z]{2}$/.test(address.postcode)) return "Vul een geldige Nederlandse postcode in.";
+  if (address.woonplaats.length > 50) return "De woonplaats mag maximaal 50 tekens bevatten.";
+  return null;
+}
+
+async function insertAddress(database, address) {
+  const result = await database.query(`
+    INSERT INTO adres (straat, postcode, woonplaats)
+    VALUES ($1, $2, $3)
+    RETURNING idadres
+  `, [address.straat, address.postcode, address.woonplaats]);
+  return result.rows[0].idadres;
+}
+
+async function saveConsultantAddress(database, username, address) {
+  const current = await database.query(
+    "SELECT idadres FROM consultant WHERE username = $1 FOR UPDATE",
+    [username],
+  );
+  if (current.rowCount === 0) return null;
+
+  let addressId = current.rows[0].idadres;
+  if (addressId !== null) {
+    const sharedAddress = await database.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM klanten WHERE idadres = $1
+        UNION ALL
+        SELECT 1 FROM consultant WHERE idadres = $1 AND username <> $2
+      ) AS shared
+    `, [addressId, username]);
+    if (!sharedAddress.rows[0].shared) {
+      const updated = await database.query(`
+        UPDATE adres
+        SET straat = $1, postcode = $2, woonplaats = $3
+        WHERE idadres = $4
+        RETURNING idadres
+      `, [address.straat, address.postcode, address.woonplaats, addressId]);
+      if (updated.rowCount === 0) throw new Error("Het huidige consultantadres kon niet worden bijgewerkt.");
+      return addressId;
+    }
+  }
+
+  addressId = await insertAddress(database, address);
+  const linked = await database.query(
+    "UPDATE consultant SET idadres = $1 WHERE username = $2",
+    [addressId, username],
+  );
+  if (linked.rowCount !== 1) throw new Error("Het nieuwe consultantadres kon niet worden gekoppeld.");
+  return addressId;
+}
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -577,9 +644,13 @@ app.get("/api/consultant/settings", async (request, response, next) => {
              locatie.naam AS location_name,
              locatie.adres,
              locatie.postcode,
-             locatie.plaats
+             locatie.plaats,
+             consultant_adres.straat AS address_street,
+             consultant_adres.postcode AS address_postcode,
+             consultant_adres.woonplaats AS address_city
       FROM consultant
       LEFT JOIN locaties AS locatie ON locatie.idlocatie = consultant.defaultlocatie
+      LEFT JOIN adres AS consultant_adres ON consultant_adres.idadres = consultant.idadres
       WHERE consultant.username = $1
       LIMIT 1
     `, [session.username]);
@@ -624,17 +695,17 @@ app.post("/api/consultants", async (request, response, next) => {
   const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
   const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
   const phone = typeof request.body?.telefoonnummer === "string" ? request.body.telefoonnummer.trim() : "";
+  const consultantAddress = readConsultantAddress(request.body);
   const functie = typeof request.body?.functie === "string" ? request.body.functie.trim() : "";
   const startTime = typeof request.body?.start_werkdag === "string" ? request.body.start_werkdag : "";
   const endTime = typeof request.body?.einde_werkdag === "string" ? request.body.einde_werkdag : "";
-  const fullName = [firstName, prefix, lastName].filter(Boolean).join(" ");
   const locationId = Number(request.body?.defaultlocatie);
   const weekdays = request.body?.werkdagen;
   const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
   const isValidTime = (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time);
 
-  if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || prefix.length > 80 || fullName.length > 80) {
-    return response.status(400).json({ error: "Vul een geldige voornaam en achternaam in (samen maximaal 80 tekens)." });
+  if (!firstName || firstName.length > 20 || !lastName || lastName.length > 40 || prefix.length > 20) {
+    return response.status(400).json({ error: "Vul een geldige voornaam (maximaal 20), tussenvoegsel (maximaal 20) en achternaam (maximaal 40 tekens) in." });
   }
   if (!/^[a-zA-Z0-9._-]{1,80}$/.test(username)) {
     return response.status(400).json({ error: "Vul een geldige gebruikersnaam in (maximaal 80 tekens; letters, cijfers, punt, streepje en underscore)." });
@@ -645,6 +716,8 @@ app.post("/api/consultants", async (request, response, next) => {
   if (phone.length > 30 || (phone && !/^[+0-9().\-\s]{6,30}$/.test(phone))) {
     return response.status(400).json({ error: "Vul een geldig telefoonnummer van maximaal 30 tekens in." });
   }
+  const addressError = validateConsultantAddress(consultantAddress, true);
+  if (addressError) return response.status(400).json({ error: addressError });
   if (!functie || functie.length > 80) {
     return response.status(400).json({ error: "Vul een functie van maximaal 80 tekens in." });
   }
@@ -705,12 +778,13 @@ app.post("/api/consultants", async (request, response, next) => {
     }
     if (!authorisatiecode) throw new Error("Er kon geen unieke authorisatiecode worden aangemaakt.");
 
+    const addressId = await insertAddress(database, consultantAddress);
     await database.query(`
       INSERT INTO consultant (
         voornaam, tussenvoegsel, achternaam, username, email, functie, telefoonnummer,
-        defaultlocatie, werkdagen, start_werkdag, einde_werkdag, password, authorisatiecode
+        defaultlocatie, werkdagen, start_werkdag, einde_werkdag, password, authorisatiecode, idadres
       )
-      VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11, $12, $13)
+      VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11, $12, $13, $14)
     `, [
       firstName,
       prefix,
@@ -725,6 +799,7 @@ app.post("/api/consultants", async (request, response, next) => {
       endTime,
       defaultClientPassword,
       authorisatiecode,
+      addressId,
     ]);
 
     await database.query("COMMIT");
@@ -749,17 +824,17 @@ app.patch("/api/consultant/settings", async (request, response, next) => {
   const lastName = typeof request.body?.achternaam === "string" ? request.body.achternaam.trim() : "";
   const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
   const phone = typeof request.body?.telefoonnummer === "string" ? request.body.telefoonnummer.trim() : "";
+  const consultantAddress = readConsultantAddress(request.body);
   const functie = typeof request.body?.functie === "string" ? request.body.functie.trim() : "";
   const startTime = typeof request.body?.start_werkdag === "string" ? request.body.start_werkdag : "";
   const endTime = typeof request.body?.einde_werkdag === "string" ? request.body.einde_werkdag : "";
-  const fullName = [firstName, prefix, lastName].filter(Boolean).join(" ");
   const locationId = Number(request.body?.defaultlocatie);
   const weekdays = request.body?.werkdagen;
   const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
   const isValidTime = (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time);
 
-  if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || prefix.length > 80 || fullName.length > 80) {
-    return response.status(400).json({ error: "Vul een geldige voornaam en achternaam in (samen maximaal 80 tekens)." });
+  if (!firstName || firstName.length > 20 || !lastName || lastName.length > 40 || prefix.length > 20) {
+    return response.status(400).json({ error: "Vul een geldige voornaam (maximaal 20), tussenvoegsel (maximaal 20) en achternaam (maximaal 40 tekens) in." });
   }
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return response.status(400).json({ error: "Vul een geldig e-mailadres in." });
@@ -767,6 +842,8 @@ app.patch("/api/consultant/settings", async (request, response, next) => {
   if (phone.length > 30 || (phone && !/^[+0-9().\-\s]{6,30}$/.test(phone))) {
     return response.status(400).json({ error: "Vul een geldig telefoonnummer van maximaal 30 tekens in." });
   }
+  const addressError = validateConsultantAddress(consultantAddress, false);
+  if (addressError) return response.status(400).json({ error: addressError });
   if (!functie || functie.length > 80) {
     return response.status(400).json({ error: "Vul een functie van maximaal 80 tekens in." });
   }
@@ -810,14 +887,33 @@ app.patch("/api/consultant/settings", async (request, response, next) => {
       return response.status(400).json({ error: "De gekozen werklocatie bestaat niet." });
     }
 
+    let consultantAddressId;
+    if (consultantAddress.provided) {
+      consultantAddressId = await saveConsultantAddress(database, session.username, consultantAddress);
+      if (consultantAddressId === null) {
+        await database.query("ROLLBACK");
+        return response.status(404).json({ error: "Consultant niet gevonden." });
+      }
+    }
+
+    const updates = [
+      firstName, prefix, lastName, email, phone, functie,
+      startTime, endTime, locationId, werkdagenValue, session.username,
+    ];
+    let addressUpdate = "";
+    if (consultantAddressId !== undefined) {
+      updates.push(consultantAddressId);
+      addressUpdate = `, idadres = $${updates.length}`;
+    }
     const result = await database.query(`
       UPDATE consultant
       SET voornaam = $1, tussenvoegsel = NULLIF($2, ''), achternaam = $3,
           email = $4, telefoonnummer = NULLIF($5, ''), functie = $6,
           start_werkdag = $7, einde_werkdag = $8, defaultlocatie = $9, werkdagen = $10
+          ${addressUpdate}
       WHERE username = $11
       RETURNING defaultlocatie, werkdagen, voornaam, tussenvoegsel, achternaam, functie
-    `, [firstName, prefix, lastName, email, phone, functie, startTime, endTime, locationId, werkdagenValue, session.username]);
+    `, updates);
     if (result.rowCount === 0) {
       await database.query("ROLLBACK");
       return response.status(404).json({ error: "Consultant niet gevonden." });
