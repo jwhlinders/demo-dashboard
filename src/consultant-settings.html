@@ -44,20 +44,20 @@
             <div class="field-row field-row-name">
               <span class="field-label">Naam</span>
               <div class="field-inline-grid no-sub-labels">
-                <input id="setting-first-name" name="voornaam" type="text" readonly>
-                <input id="setting-prefix" name="tussenvoegsel" type="text" readonly>
-                <input id="setting-last-name" name="achternaam" type="text" readonly>
+                <input id="setting-first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" aria-label="Voornaam">
+                <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="80" aria-label="Tussenvoegsel">
+                <input id="setting-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" aria-label="Achternaam">
               </div>
             </div>
 
             <div class="field-row">
               <label class="field-label" for="setting-email">E-mailadres</label>
-              <input id="setting-email" name="email" type="email" readonly>
+              <input id="setting-email" name="email" type="email" maxlength="254" autocomplete="email" required>
             </div>
 
             <div class="field-row">
               <label class="field-label" for="setting-phone">Telefoonnummer</label>
-              <input id="setting-phone" name="telefoonnummer" type="text" readonly>
+              <input id="setting-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
             </div>
           </div>
         </section>
@@ -66,16 +66,18 @@
           <h3 id="work-location-title">Werklocatie</h3>
           <div class="settings-stack">
             <div class="field-row">
-              <span class="field-label">Naam</span>
-              <input id="setting-default-location" name="defaultlocatie" type="text" readonly>
+              <label class="field-label" for="setting-default-location">Naam</label>
+              <select id="setting-default-location" name="defaultlocatie" required disabled>
+                <option value="">Locaties laden...</option>
+              </select>
             </div>
 
             <div class="field-row field-row-address">
               <span class="field-label">Adres</span>
               <div class="field-inline-grid no-sub-labels">
-                <input id="setting-adres" name="adres" type="text" readonly>
-                <input id="setting-postcode" name="postcode" type="text" readonly>
-                <input id="setting-plaats" name="plaats" type="text" readonly>
+                <input id="setting-adres" name="adres" type="text" readonly aria-readonly="true" tabindex="-1">
+                <input id="setting-postcode" name="postcode" type="text" readonly aria-readonly="true" tabindex="-1">
+                <input id="setting-plaats" name="plaats" type="text" readonly aria-readonly="true" tabindex="-1">
               </div>
             </div>
           </div>
@@ -85,8 +87,8 @@
           <h3 id="other-details-title">Overige gegevens</h3>
           <div class="settings-stack">
             <div class="field-row">
-              <label class="field-label" for="setting-role">Rol</label>
-              <input id="setting-role" name="role" type="text" readonly>
+              <label class="field-label" for="setting-role">Functie</label>
+              <input id="setting-role" name="functie" type="text" maxlength="80" required>
             </div>
 
             <div class="field-row">
@@ -118,9 +120,9 @@
             <div class="field-row field-row-hours">
               <span class="field-label">Werktijden</span>
               <div class="time-inline no-sub-labels">
-                <input id="setting-start-werkdag" name="start_werkdag" type="text" readonly>
+                <input id="setting-start-werkdag" name="start_werkdag" type="time" required>
                 <span class="time-separator">t/m</span>
-                <input id="setting-einde-werkdag" name="einde_werkdag" type="text" readonly>
+                <input id="setting-einde-werkdag" name="einde_werkdag" type="time" required>
               </div>
             </div>
 
@@ -146,6 +148,26 @@
 
   <script>
     const settingsError = document.querySelector("#settings-error");
+    let locationsById = new Map();
+
+    function updateLocationDetails() {
+      const location = locationsById.get(document.querySelector("#setting-default-location").value);
+      for (const fieldId of ["setting-adres", "setting-postcode", "setting-plaats"]) {
+        const field = document.querySelector(`#${fieldId}`);
+        field.readOnly = true;
+        field.setAttribute("aria-readonly", "true");
+      }
+      const addressFields = {
+        "setting-adres": location?.adres || "",
+        "setting-postcode": location?.postcode || "",
+        "setting-plaats": location?.plaats || "",
+      };
+      for (const [fieldId, value] of Object.entries(addressFields)) {
+        document.querySelector(`#${fieldId}`).value = value;
+      }
+    }
+
+    document.querySelector("#setting-default-location").addEventListener("change", updateLocationDetails);
 
     async function loadPasswordResetRequests() {
       const list = document.querySelector("#password-reset-requests");
@@ -217,6 +239,10 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Instellingen konden niet worden geladen.");
 
+        const locationsResponse = await fetch("/api/consultant/settings/locations");
+        const locations = await locationsResponse.json();
+        if (!locationsResponse.ok) throw new Error(locations.error || "Locaties konden niet worden geladen.");
+
         const consultant = result;
         const fields = {
           voornaam: consultant.voornaam || "",
@@ -224,11 +250,8 @@
           achternaam: consultant.achternaam || "",
           telefoonnummer: consultant.telefoonnummer || "",
           email: consultant.email || "",
-          role: consultant.role || "consultant",
+          role: consultant.functie || "",
           defaultlocatie: consultant.location_name || "",
-          adres: consultant.adres || "",
-          postcode: consultant.postcode || "",
-          plaats: consultant.plaats || "",
           start_werkdag: consultant.start_werkdag || "",
           einde_werkdag: consultant.einde_werkdag || "",
           created_at: consultant.aanmaakdatum ? new Date(consultant.aanmaakdatum).toLocaleString("nl-NL") : "",
@@ -240,10 +263,12 @@
         document.querySelector("#setting-email").value = fields.email;
         document.querySelector("#setting-phone").value = fields.telefoonnummer;
         document.querySelector("#setting-role").value = fields.role;
-        document.querySelector("#setting-default-location").value = fields.defaultlocatie;
-        document.querySelector("#setting-adres").value = fields.adres;
-        document.querySelector("#setting-postcode").value = fields.postcode;
-        document.querySelector("#setting-plaats").value = fields.plaats;
+        const locationSelect = document.querySelector("#setting-default-location");
+        locationsById = new Map(locations.map((location) => [String(location.id), location]));
+        locationSelect.replaceChildren(...locations.map((location) => new Option(location.naam, String(location.id))));
+        locationSelect.value = String(consultant.defaultlocatie || "");
+        locationSelect.disabled = locations.length === 0;
+        updateLocationDetails();
         for (const checkbox of document.querySelectorAll("[data-weekday]")) {
           const isWorkday = typeof consultant.werkdagen === "string"
             && consultant.werkdagen.toLocaleLowerCase("nl-NL").includes(checkbox.dataset.weekday.toLocaleLowerCase("nl-NL"));
@@ -254,6 +279,9 @@
         const name = [consultant.voornaam, consultant.tussenvoegsel, consultant.achternaam].filter(Boolean).join(" ") || "Instellingen";
         const username = consultant.username ? ` (${consultant.username})` : "";
         document.querySelector("#consultant-name").textContent = `${name}${username}`;
+        const locationLabel = document.querySelector("#consultant-location");
+        locationLabel.textContent = fields.defaultlocatie ? `Locatie: ${fields.defaultlocatie}` : "";
+        locationLabel.hidden = !fields.defaultlocatie;
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden geladen.";
         settingsError.hidden = false;
@@ -275,17 +303,39 @@
       const werkdagen = [...document.querySelectorAll("[data-weekday]:checked")]
         .map((checkbox) => checkbox.dataset.weekday);
       try {
-        const response = await fetch("/api/consultant/settings/workdays", {
+        const locationSelect = document.querySelector("#setting-default-location");
+        if (!locationSelect.value) throw new Error("Kies een werklocatie.");
+        const voornaam = document.querySelector("#setting-first-name").value.trim();
+        const tussenvoegsel = document.querySelector("#setting-prefix").value.trim();
+        const achternaam = document.querySelector("#setting-last-name").value.trim();
+        const name = [voornaam, tussenvoegsel, achternaam].filter(Boolean).join(" ");
+        const response = await fetch("/api/consultant/settings", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ werkdagen }),
+          body: JSON.stringify({
+            voornaam,
+            tussenvoegsel,
+            achternaam,
+            email: document.querySelector("#setting-email").value.trim(),
+            telefoonnummer: document.querySelector("#setting-phone").value.trim(),
+            functie: document.querySelector("#setting-role").value.trim(),
+            start_werkdag: document.querySelector("#setting-start-werkdag").value,
+            einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
+            werkdagen,
+            defaultlocatie: Number(locationSelect.value),
+          }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Werkdagen konden niet worden opgeslagen.");
-        status.textContent = "Werkdagen zijn opgeslagen.";
+        if (!response.ok) throw new Error(result.error || "Instellingen konden niet worden opgeslagen.");
+        const username = document.querySelector("#consultant-name").textContent.match(/\(([^)]+)\)$/)?.[0] || "";
+        document.querySelector("#consultant-name").textContent = `${name || "Instellingen"} ${username}`.trim();
+        const locationLabel = document.querySelector("#consultant-location");
+        locationLabel.textContent = `Locatie: ${locationSelect.selectedOptions[0].textContent}`;
+        locationLabel.hidden = false;
+        status.textContent = "Instellingen zijn opgeslagen.";
         status.hidden = false;
       } catch (error) {
-        settingsError.textContent = error.message || "Werkdagen konden niet worden opgeslagen.";
+        settingsError.textContent = error.message || "Instellingen konden niet worden opgeslagen.";
         settingsError.hidden = false;
       } finally {
         button.disabled = false;
