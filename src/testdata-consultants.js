@@ -1,7 +1,13 @@
+const { randomInt } = require("node:crypto");
 const { Pool } = require("pg");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const TEST_PASSWORD = "Test2026!";
+
+function randomMobileNumber() {
+  return `06${String(randomInt(10000000, 100000000)).padStart(8, "0")}`;
+}
+
 const consultants = [
   {
     voornaam: "Eva",
@@ -10,7 +16,6 @@ const consultants = [
     username: "emulder",
     email: "eva.mulder@example.ta",
     functie: "Beheerder",
-    telefoonnummer: "+31 20 000 0001",
     werkdagen: "MaDiWoDoVr",
     start_werkdag: "09:00",
     einde_werkdag: "17:00",
@@ -23,7 +28,6 @@ const consultants = [
     username: "jdekker",
     email: "jeroen.dekker@example.ta",
     functie: "Huisarts",
-    telefoonnummer: "+31 20 000 0002",
     werkdagen: "MaDiDoVr",
     start_werkdag: "08:30",
     einde_werkdag: "16:30",
@@ -36,7 +40,6 @@ const consultants = [
     username: "sverhoeven",
     email: "sanne.verhoeven@example.ta",
     functie: "Psycholoog",
-    telefoonnummer: "+31 20 000 0003",
     werkdagen: "MaWoDoVr",
     start_werkdag: "09:00",
     einde_werkdag: "17:30",
@@ -49,7 +52,6 @@ const consultants = [
     username: "tvanloon",
     email: "thomas.vanloon@example.ta",
     functie: "Praktijkondersteuner GGZ",
-    telefoonnummer: "+31 20 000 0004",
     werkdagen: "DiWoDoVr",
     start_werkdag: "08:30",
     einde_werkdag: "16:30",
@@ -62,7 +64,6 @@ const consultants = [
     username: "nvisser",
     email: "nadia.visser@example.ta",
     functie: "Fysiotherapeut",
-    telefoonnummer: "+31 20 000 0005",
     werkdagen: "MaDiWoDo",
     start_werkdag: "09:00",
     einde_werkdag: "17:00",
@@ -95,10 +96,11 @@ async function seedConsultants() {
     }
 
     let created = 0;
+    let phoneNumbersUpdated = 0;
     for (let index = 0; index < consultants.length; index += 1) {
       const consultant = consultants[index];
       const existing = await database.query(`
-        SELECT username, email
+        SELECT username, email, telefoonnummer
         FROM consultant
         WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($2)
       `, [consultant.username, consultant.email]);
@@ -112,7 +114,16 @@ async function seedConsultants() {
       if (conflictingEmail) {
         throw new Error(`Het e-mailadres ${consultant.email} is al gekoppeld aan een ander consultantaccount.`);
       }
-      if (matchingUsername) continue;
+      if (matchingUsername) {
+        if (!/^06\d{8}$/.test(matchingUsername.telefoonnummer || "")) {
+          await database.query(
+            "UPDATE consultant SET telefoonnummer = $1 WHERE LOWER(username) = LOWER($2)",
+            [randomMobileNumber(), consultant.username],
+          );
+          phoneNumbersUpdated += 1;
+        }
+        continue;
+      }
 
       const usernameConflict = await database.query(
         "SELECT username FROM klanten WHERE LOWER(username) = LOWER($1)",
@@ -135,7 +146,7 @@ async function seedConsultants() {
         consultant.username,
         consultant.email,
         consultant.functie,
-        consultant.telefoonnummer,
+        randomMobileNumber(),
         locations.rows[index % locations.rowCount].idlocatie,
         consultant.werkdagen,
         consultant.start_werkdag,
@@ -148,6 +159,7 @@ async function seedConsultants() {
 
     await database.query("COMMIT");
     console.log(`Testconsultants toegevoegd: ${created}; al aanwezig overgeslagen: ${consultants.length - created}.`);
+    console.log(`Telefoonnummers bijgewerkt naar 06-nummers: ${phoneNumbersUpdated}.`);
     console.log(`Voor alle testconsultants is het tijdelijke wachtwoord: ${TEST_PASSWORD}`);
     console.log("Deze accounts zijn uitsluitend bedoeld voor een lokale testdatabase.");
   } catch (error) {

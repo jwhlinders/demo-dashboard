@@ -4,6 +4,14 @@ type Consultant = {
   werkdagen: string | null;
 };
 
+type WorkLocation = {
+  id: number;
+  naam: string;
+  adres: string | null;
+  postcode: string | null;
+  plaats: string | null;
+};
+
 type AppointmentData = {
   clientSelect: Locator;
   clientName: string;
@@ -108,7 +116,7 @@ test("TC-02: consultant kan instellingen bekijken en werkdagen wijzigen", async 
   try {
     await monday.uncheck();
     await page.locator("#save-button").click();
-    await expect(page.locator("#settings-status")).toHaveText("Werkdagen zijn opgeslagen.");
+    await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
     const updatedResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
     const updatedConsultant = await updatedResponse.json();
     expect(updatedConsultant.werkdagen.includes("Ma")).toBe(false);
@@ -116,7 +124,137 @@ test("TC-02: consultant kan instellingen bekijken en werkdagen wijzigen", async 
   } finally {
     if (mondayWasEnabled) await monday.check();
     await page.locator("#save-button").click();
-    await expect(page.locator("#settings-status")).toHaveText("Werkdagen zijn opgeslagen.");
+    await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
+  }
+});
+
+test("TC-02b: consultant kan contactgegevens, functie en werktijden wijzigen", async ({ page }) => {
+  await page.goto("/settings");
+  const settingsUrl = new URL("/api/consultant/settings", page.url()).toString();
+  const response = await page.request.get(settingsUrl);
+  expect(response.ok()).toBeTruthy();
+  const consultant = await response.json() as {
+    voornaam: string;
+    tussenvoegsel: string | null;
+    achternaam: string;
+    email: string;
+    telefoonnummer: string | null;
+    functie: string;
+    start_werkdag: string;
+    einde_werkdag: string;
+    defaultlocatie: number;
+    werkdagen: string;
+  };
+  const original = {
+    voornaam: consultant.voornaam,
+    tussenvoegsel: consultant.tussenvoegsel || "",
+    achternaam: consultant.achternaam,
+    email: consultant.email,
+    telefoonnummer: consultant.telefoonnummer || "",
+    functie: consultant.functie,
+    start_werkdag: consultant.start_werkdag.slice(0, 5),
+    einde_werkdag: consultant.einde_werkdag.slice(0, 5),
+    defaultlocatie: consultant.defaultlocatie,
+    werkdagen: ["Ma", "Di", "Wo", "Do", "Vr"]
+      .filter((weekday) => consultant.werkdagen?.includes(weekday)),
+  };
+  const updated = {
+    ...original,
+    voornaam: `Test${original.voornaam}`,
+    email: `settings-${Date.now()}@example.invalid`,
+    telefoonnummer: "0612345678",
+    functie: original.functie.toLocaleLowerCase("nl-NL") === "beheerder" ? original.functie : "Testfunctie",
+    start_werkdag: "09:15",
+    einde_werkdag: "17:15",
+  };
+
+  async function fillAndSave(values: typeof original) {
+    await page.locator("#setting-first-name").fill(values.voornaam);
+    await page.locator("#setting-prefix").fill(values.tussenvoegsel);
+    await page.locator("#setting-last-name").fill(values.achternaam);
+    await page.locator("#setting-email").fill(values.email);
+    await page.locator("#setting-phone").fill(values.telefoonnummer);
+    await page.locator("#setting-role").fill(values.functie);
+    await page.locator("#setting-start-werkdag").fill(values.start_werkdag);
+    await page.locator("#setting-einde-werkdag").fill(values.einde_werkdag);
+    await page.locator("#setting-default-location").selectOption(String(values.defaultlocatie));
+    for (const weekday of ["Ma", "Di", "Wo", "Do", "Vr"]) {
+      const checkbox = page.locator(`[data-weekday="${weekday}"]`);
+      const shouldBeChecked = values.werkdagen.includes(weekday);
+      if (shouldBeChecked) await checkbox.check();
+      else await checkbox.uncheck();
+    }
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
+  }
+
+  try {
+    await fillAndSave(updated);
+    const updatedResponse = await page.request.get(settingsUrl);
+    expect(updatedResponse.ok()).toBeTruthy();
+    const saved = await updatedResponse.json();
+    expect(saved.voornaam).toBe(updated.voornaam);
+    expect(saved.email).toBe(updated.email);
+    expect(saved.telefoonnummer).toBe(updated.telefoonnummer);
+    expect(saved.functie).toBe(updated.functie);
+    expect(saved.start_werkdag).toContain(updated.start_werkdag);
+    expect(saved.einde_werkdag).toContain(updated.einde_werkdag);
+  } finally {
+    await fillAndSave(original);
+  }
+
+  if (original.functie.toLocaleLowerCase("nl-NL") !== "beheerder") {
+    const promotionAttempt = await page.request.patch(settingsUrl, {
+      data: { ...original, functie: "Beheerder" },
+    });
+    expect(promotionAttempt.status()).toBe(403);
+  }
+});
+
+test("TC-02a: consultant kan een werklocatie kiezen en de bijbehorende adresgegevens bekijken", async ({ page }) => {
+  await page.goto("/settings");
+
+  const settingsUrl = new URL("/api/consultant/settings", page.url()).toString();
+  const locationsUrl = new URL("/api/consultant/settings/locations", page.url()).toString();
+  const settingsResponse = await page.request.get(settingsUrl);
+  const locationsResponse = await page.request.get(locationsUrl);
+  expect(settingsResponse.ok()).toBeTruthy();
+  expect(locationsResponse.ok()).toBeTruthy();
+  const consultant = await settingsResponse.json() as { defaultlocatie: number; werkdagen: string | null };
+  const locations = await locationsResponse.json() as WorkLocation[];
+  const originalLocationId = String(consultant.defaultlocatie);
+  const originalLocation = locations.find((location) => String(location.id) === originalLocationId);
+  expect(originalLocation).toBeTruthy();
+
+  const locationSelect = page.locator("#setting-default-location");
+  await expect(locationSelect).toHaveValue(originalLocationId);
+  for (const field of ["#setting-adres", "#setting-postcode", "#setting-plaats"]) {
+    await expect(page.locator(field)).toHaveJSProperty("readOnly", true);
+  }
+  await expect(page.locator("#setting-adres")).toHaveValue(originalLocation?.adres || "");
+  await expect(page.locator("#setting-postcode")).toHaveValue(originalLocation?.postcode || "");
+  await expect(page.locator("#setting-plaats")).toHaveValue(originalLocation?.plaats || "");
+
+  const alternativeLocation = locations.find((location) => String(location.id) !== originalLocationId);
+  test.skip(!alternativeLocation, "Er zijn minstens twee locaties nodig om de locatiekeuze te testen.");
+  if (!alternativeLocation) return;
+
+  try {
+    await locationSelect.selectOption(String(alternativeLocation.id));
+    await expect(page.locator("#setting-adres")).toHaveValue(alternativeLocation.adres || "");
+    await expect(page.locator("#setting-postcode")).toHaveValue(alternativeLocation.postcode || "");
+    await expect(page.locator("#setting-plaats")).toHaveValue(alternativeLocation.plaats || "");
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
+
+    const updatedResponse = await page.request.get(settingsUrl);
+    expect(updatedResponse.ok()).toBeTruthy();
+    const updatedConsultant = await updatedResponse.json() as { defaultlocatie: number };
+    expect(Number(updatedConsultant.defaultlocatie)).toBe(alternativeLocation.id);
+  } finally {
+    await locationSelect.selectOption(originalLocationId);
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
   }
 });
 

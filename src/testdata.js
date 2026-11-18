@@ -42,15 +42,6 @@ function createLocation(city) {
   };
 }
 
-function shuffled(values) {
-  const result = [...values];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const swapIndex = randomInt(index + 1);
-    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
-  }
-  return result;
-}
-
 async function seedTestData(databasePool) {
   const database = await databasePool.connect();
   try {
@@ -72,22 +63,21 @@ async function seedTestData(databasePool) {
       const existingByName = new Map(existing.rows.map((row) => [row.naam, row]));
       if (locations.some((location) => {
         const row = existingByName.get(location.naam);
-        return !row || row.plaats !== location.plaats || row.idlocatie < 100 || row.idlocatie > 999;
+        return !row || row.plaats !== location.plaats || row.idlocatie < 1;
       })) {
         throw new Error("Bestaande locaties met testnamen hebben onverwachte gegevens of ID's. Er is niets gewijzigd.");
       }
       locationIds = locations.map((location) => existingByName.get(location.naam).idlocatie);
     } else {
-      const usedIdsResult = await database.query("SELECT idlocatie FROM locaties WHERE idlocatie BETWEEN 100 AND 999");
-      const usedIds = new Set(usedIdsResult.rows.map((row) => row.idlocatie));
-      const availableIds = [];
-      for (let id = 100; id <= 999; id += 1) {
-        if (!usedIds.has(id)) availableIds.push(id);
-      }
-      if (availableIds.length < locations.length) {
-        throw new Error("Er zijn minder dan 25 vrije locatie-ID's tussen 100 en 999.");
-      }
-      locationIds = shuffled(availableIds).slice(0, locations.length);
+      const usedIdsResult = await database.query("SELECT idlocatie FROM locaties WHERE idlocatie >= 1");
+      const lastUsedId = usedIdsResult.rows.reduce(
+        (lastId, row) => Math.max(lastId, row.idlocatie),
+        0,
+      );
+      locationIds = Array.from(
+        { length: locations.length },
+        (_, index) => lastUsedId + index + 1,
+      );
     }
 
     const idColumn = await database.query(`
@@ -112,7 +102,9 @@ async function seedTestData(databasePool) {
           columns.unshift("id");
           values.unshift(nextId++);
         }
+        columns.push("actief");
         const placeholders = values.map((_, valueIndex) => `$${valueIndex + 1}`);
+        placeholders.push("B'1'");
         await database.query(
           `INSERT INTO locaties (${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
           values,

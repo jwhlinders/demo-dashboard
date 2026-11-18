@@ -47,6 +47,9 @@ CREATE TABLE klanten (
 INSERT INTO locaties (id, naam, adres, postcode, plaats, telefoonnummer, actief, idlocatie)
 VALUES (1, 'CI testlocatie', 'Teststraat 1', '1234AB', 'Teststad', '020-0000000', B'1', 1);
 
+INSERT INTO locaties (id, naam, adres, postcode, plaats, telefoonnummer, actief, idlocatie)
+VALUES (2, 'CI tweede testlocatie', 'Voorbeeldstraat 2', '2345BC', 'Voorbeeldstad', '020-0000001', B'1', 2);
+
 INSERT INTO consultant (
   achternaam,
   email,
