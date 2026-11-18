@@ -195,10 +195,10 @@ app.post("/api/consultant/verify-registration", async (request, response, next) 
       SELECT EXISTS (
         SELECT 1
         FROM consultant
-        INNER JOIN locaties ON locaties.idlocatie = consultant.defaultlocatie
+        INNER JOIN adres ON adres.idadres = consultant.idadres
         WHERE LOWER(consultant.username) = LOWER($1)
           AND consultant.authorisatiecode = $2
-          AND REGEXP_REPLACE(UPPER(COALESCE(locaties.postcode, '')), '[[:space:]-]', '', 'g') = $3
+          AND REGEXP_REPLACE(UPPER(COALESCE(adres.postcode, '')), '[[:space:]-]', '', 'g') = $3
       ) AS verified
     `, [username, authorisatiecode, postcode]);
     if (!result.rows[0].verified) {
@@ -239,9 +239,9 @@ app.post("/api/consultant/register", async (request, response, next) => {
         AND authorisatiecode = $3
         AND EXISTS (
           SELECT 1
-          FROM locaties
-          WHERE locaties.idlocatie = consultant.defaultlocatie
-            AND REGEXP_REPLACE(UPPER(COALESCE(locaties.postcode, '')), '[[:space:]-]', '', 'g') = $4
+          FROM adres
+          WHERE adres.idadres = consultant.idadres
+            AND REGEXP_REPLACE(UPPER(COALESCE(adres.postcode, '')), '[[:space:]-]', '', 'g') = $4
         )
       RETURNING username
     `, [password, username, authorisatiecode, postcode]);

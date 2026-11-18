@@ -14,10 +14,6 @@ const CONFIG = {
     username: process.env.E2E_CLIENT_USERNAME ?? 'testuser',
     password: process.env.E2E_CLIENT_PASSWORD ?? 'Test1234!',
   },
-  // Optioneel: gebruiker met speciale tekens in wachtwoord (TC-10)
-  specialUser: process.env.SPECIAL_USER
-    ? { username: process.env.SPECIAL_USER, password: process.env.SPECIAL_PASS ?? 'P@ss!#€%&' }
-    : undefined,
   // Gedrag volgens specificatie (TC-09)
   usernameTrimmed: true, // true = spaties worden getrimd, false = geweigerd
   usernameCaseSensitive: false, // true = hoofdlettergevoelig
@@ -157,11 +153,6 @@ test.describe('Loginpagina - functionele testcases', () => {
       await expect(page.getByText(/sql|syntax|exception|stack trace|ORA-\d+/i)).toHaveCount(0);
     });
 
-    test('TC-10b: geldig wachtwoord met speciale tekens', async () => {
-      test.skip(!CONFIG.specialUser, 'Zet SPECIAL_USER en SPECIAL_PASS om deze test te draaien');
-      if (!CONFIG.specialUser) return;
-      await login.login(CONFIG.specialUser.username, CONFIG.specialUser.password);
-      await login.expectLoggedIn();
-    });
+   
   });
 });

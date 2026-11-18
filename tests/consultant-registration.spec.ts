@@ -30,19 +30,26 @@ test.beforeAll(async () => {
   if (!connectionString) return;
 
   database = new Pool({ connectionString });
-  const locationResult = await database.query(`
-    SELECT idlocatie, postcode
-    FROM locaties
-    WHERE NULLIF(TRIM(postcode), '') IS NOT NULL
+  const registrationData = await database.query(`
+    SELECT location.idlocatie, address.idadres, address.postcode
+    FROM locaties AS location
+    CROSS JOIN adres AS address
+    WHERE NULLIF(TRIM(location.postcode), '') IS NOT NULL
+      AND NULLIF(TRIM(address.postcode), '') IS NOT NULL
+      AND REGEXP_REPLACE(UPPER(location.postcode), '[[:space:]-]', '', 'g')
+        <> REGEXP_REPLACE(UPPER(address.postcode), '[[:space:]-]', '', 'g')
+    ORDER BY location.idlocatie, address.idadres
     LIMIT 1
   `, []);
-  if (locationResult.rows.length === 0) throw new Error("A location with a postcode is required for the consultant registration test.");
-  const location = locationResult.rows[0];
-  postcode = String(location.postcode);
+  if (registrationData.rows.length === 0) {
+    throw new Error("A location and consultant address with different postcodes are required for the consultant registration test.");
+  }
+  const { idlocatie, idadres, postcode: addressPostcode } = registrationData.rows[0];
+  postcode = String(addressPostcode);
 
   await database.query(`
-    INSERT INTO consultant (voornaam, achternaam, email, username, password, authorisatiecode, defaultlocatie)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO consultant (voornaam, achternaam, email, username, password, authorisatiecode, defaultlocatie, idadres)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   `, [
     "Test",
     "Registratie",
@@ -50,7 +57,8 @@ test.beforeAll(async () => {
     username,
     "InitialPassword2026!",
     authorizationCode,
-    location.idlocatie,
+    idlocatie,
+    idadres,
   ]);
 });
 
