@@ -29,6 +29,10 @@ De scripts voegen fictieve testgegevens toe en zijn veilig opnieuw uit te voeren
 
 Voor cliënten zonder account maakt de server automatisch een gebruikersnaam op basis van de eerste letter van de voornaam en de achternaam (bijvoorbeeld `jjansen` voor Jan Jansen). Bij dubbele namen wordt een volgnummer toegevoegd. Het tijdelijke wachtwoord is `Welkom01`; cliënten moeten dit na de eerste login wijzigen. Nieuwe registraties krijgen dezelfde accountnaamregel en een tijdelijk wachtwoord.
 
+## Consultantaccounts
+
+Een beheerder kan via **Instellingen > Nieuw consultant** een consultantaccount aanmaken. De applicatie genereert een eenmalige authorisatiecode van acht tekens. De consultant activeert het account via `/consultant` met de gebruikersnaam, authorisatiecode en postcode van de werklocatie, en stelt daarna zelf een wachtwoord in. E-mailverzending van deze gegevens is nog niet ingericht.
+
 ## End-to-endtest
 
 Installeer de Playwright-browser eenmalig met `npx playwright install chromium`. Stel `E2E_BEHEERDER_USERNAME` en `E2E_BEHEERDER_PASSWORD` in voor een beheerderaccount, `E2E_CONSULTANT_USERNAME` en `E2E_CONSULTANT_PASSWORD` voor een gewone consultant en `E2E_CLIENT_USERNAME` voor een cliëntaccount in `.env` of de shell. De database moet deze accounts bevatten. Voer de test uit met `npm run test:e2e`; Playwright start de app met de bestaande `.env`-configuratie. De instellingenintegratietest voegt tijdelijk aanvragen toe voor de cliënt en de gewone consultant. Beheerders kunnen beide zien en afhandelen; gewone consultants alleen cliëntaanvragen. De test verwijdert achteraf alleen de eigen records; voer de tests uitsluitend uit tegen een testdatabase.

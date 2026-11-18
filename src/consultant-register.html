@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>Consultant registreren | Cliëntenagenda</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="login-page">
+  <main class="login-shell register-shell">
+    <section class="login-panel" aria-labelledby="consultant-register-title">
+      <a class="brand login-brand" href="/login" aria-label="Cliëntenagenda">
+        <span class="brand-mark" aria-hidden="true">&#128197;</span>
+        <span>Cliëntenagenda</span>
+      </a>
+      <p class="eyebrow">Nieuw consultantaccount</p>
+      <h1 id="consultant-register-title">Consultant registreren</h1>
+      <p class="login-copy">Controleer je gebruikersnaam, authorisatiecode en postcode. Daarna kun je een wachtwoord instellen.</p>
+      <form id="consultant-register-form">
+        <div class="registration-fields" id="consultant-registration-verification">
+          <label class="field" for="consultant-username">
+            <span>Gebruikersnaam</span>
+            <input id="consultant-username" name="username" type="text" maxlength="80" autocomplete="username" required autofocus>
+          </label>
+          <label class="field" for="consultant-authorisatiecode">
+            <span>Authorisatiecode</span>
+            <input id="consultant-authorisatiecode" name="authorisatiecode" type="text" minlength="8" maxlength="8" pattern="[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}" autocomplete="one-time-code" autocapitalize="characters" required>
+          </label>
+          <label class="field" for="consultant-postcode">
+            <span>Postcode</span>
+            <input id="consultant-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" autocomplete="postal-code" placeholder="1234 AB" required>
+          </label>
+          <button class="primary-button" id="consultant-verify-button" type="button">Gegevens controleren</button>
+        </div>
+        <div class="registration-fields" id="consultant-registration-password" hidden>
+          <p class="login-copy">Gegevens gecontroleerd. Stel nu je wachtwoord in.</p>
+          <label class="field" for="consultant-password">
+            <span>Wachtwoord</span>
+            <input id="consultant-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+          </label>
+          <label class="field" for="consultant-password-confirmation">
+            <span>Herhaal wachtwoord</span>
+            <input id="consultant-password-confirmation" name="passwordConfirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+          </label>
+          <button class="primary-button" id="consultant-register-submit" type="submit">Account activeren</button>
+        </div>
+        <p class="login-error" id="consultant-register-error" role="alert" hidden></p>
+      </form>
+      <p class="register-success" id="consultant-register-success" role="status" hidden></p>
+      <p class="login-copy register-prompt"><a href="/login">Terug naar inloggen</a></p>
+    </section>
+  </main>
+  <script>
+    const form = document.querySelector("#consultant-register-form");
+    const error = document.querySelector("#consultant-register-error");
+    const success = document.querySelector("#consultant-register-success");
+    const verificationFields = document.querySelector("#consultant-registration-verification");
+    const passwordFields = document.querySelector("#consultant-registration-password");
+    const verifyButton = document.querySelector("#consultant-verify-button");
+    const submitButton = document.querySelector("#consultant-register-submit");
+    const authorisatiecodeInput = document.querySelector("#consultant-authorisatiecode");
+    const postcodeInput = document.querySelector("#consultant-postcode");
+
+    authorisatiecodeInput.addEventListener("input", () => {
+      authorisatiecodeInput.value = authorisatiecodeInput.value.toUpperCase();
+    });
+    postcodeInput.addEventListener("input", () => {
+      postcodeInput.value = postcodeInput.value.toUpperCase();
+    });
+
+    verifyButton.addEventListener("click", async () => {
+      error.hidden = true;
+      verifyButton.disabled = true;
+      try {
+        const response = await fetch("/api/consultant/verify-registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.querySelector("#consultant-username").value,
+            authorisatiecode: authorisatiecodeInput.value,
+            postcode: postcodeInput.value,
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Gegevens controleren is mislukt.");
+        verificationFields.hidden = true;
+        passwordFields.hidden = false;
+        document.querySelector("#consultant-password").focus();
+      } catch (verificationError) {
+        error.textContent = verificationError.message || "Gegevens controleren is mislukt.";
+        error.hidden = false;
+      } finally {
+        verifyButton.disabled = false;
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      success.hidden = true;
+      submitButton.disabled = true;
+      try {
+        const response = await fetch("/api/consultant/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(form))),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Registreren is mislukt.");
+        form.hidden = true;
+        success.textContent = result.message;
+        success.hidden = false;
+      } catch (registrationError) {
+        error.textContent = registrationError.message || "Registreren is mislukt. Controleer je verbinding.";
+        error.hidden = false;
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

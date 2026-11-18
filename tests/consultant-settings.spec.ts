@@ -28,13 +28,15 @@ type PasswordResetRequest = {
 };
 
 type TestDatabasePool = {
-  query: (sql: string, values: unknown[]) => Promise<unknown>;
+  query: (sql: string, values: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
   end: () => Promise<void>;
 };
 
 const { Pool }: { Pool: new (options: { connectionString: string }) => TestDatabasePool } = require("pg");
 
 let database: TestDatabasePool | undefined;
+const newConsultantUsername = `pw-consultant-${Date.now()}`;
+const secondConsultantUsername = `${newConsultantUsername}-2`;
 
 async function login(page: Page, credentials: { username?: string; password?: string }) {
   test.skip(
@@ -103,6 +105,10 @@ test.afterAll(async () => {
       "DELETE FROM password_reset_requests WHERE client_username IN ($1, $2, $3)",
       [CONFIG.consultant.username!, CONFIG.clientUsername!, CONFIG.anotherClientUsername!],
     );
+    await database.query(
+      "DELETE FROM consultant WHERE username IN ($1, $2)",
+      [newConsultantUsername, secondConsultantUsername],
+    );
   } finally {
     await database.end();
     database = undefined;
@@ -168,4 +174,84 @@ test("TC-03 Consultant can handle a client's password-reset request", async ({ p
     "client",
     "Cliënt",
   );
+});
+
+test("TC-04 Consultant cannot add another consultant", async ({ page }) => {
+  await login(page, CONFIG.consultant);
+  await page.goto("/settings");
+
+  await expect(page.locator("#add-consultant-button")).toBeHidden();
+  const response = await page.request.post(new URL("/api/consultants", page.url()).toString(), {
+    data: {},
+  });
+  expect(response.status()).toBe(403);
+});
+
+test("TC-05 Beheerder can add a consultant and receives a stored authorization code", async ({ page }) => {
+  await login(page, CONFIG.beheerder);
+  await page.goto("/settings");
+
+  const addConsultantButton = page.locator("#add-consultant-button");
+  await expect(addConsultantButton).toBeVisible();
+  await addConsultantButton.click();
+  await expect(page.locator("#settings-title")).toHaveText("Nieuw consultant");
+  await expect(page.locator("#setting-username")).toBeVisible();
+
+  await page.locator("#setting-first-name").fill("Playwright");
+  await page.locator("#setting-prefix").fill("");
+  await page.locator("#setting-last-name").fill("Consultant");
+  await page.locator("#setting-email").fill(`new-consultant-${Date.now()}@example.invalid`);
+  await page.locator("#setting-phone").fill("0612345678");
+  await page.locator("#setting-username").fill(newConsultantUsername);
+  await page.locator("#setting-role").fill("Behandelaar");
+  await page.locator("#setting-default-location").selectOption({ index: 1 });
+  await page.locator("#setting-start-werkdag").fill("09:00");
+  await page.locator("#setting-einde-werkdag").fill("17:00");
+  await page.locator('[data-weekday="Ma"]').check();
+  await page.locator("#save-button").click();
+
+  await expect(page.locator("#settings-status")).toHaveText("Consultant is aangemaakt. Bewaar de authorisatiecode.");
+  const authorisatiecode = await page.locator("#setting-authorisatiecode").inputValue();
+  expect(authorisatiecode).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/);
+
+  const storedCode = await database!.query(
+    "SELECT authorisatiecode FROM consultant WHERE username = $1",
+    [newConsultantUsername],
+  );
+  expect(storedCode.rows[0].authorisatiecode).toBe(authorisatiecode);
+  await expect(page.locator("#setting-first-name")).not.toBeEditable();
+  await expect(page.locator("#setting-username")).not.toBeEditable();
+  await expect(page.locator("#setting-authorisatiecode")).not.toBeEditable();
+  await expect(page.locator("#setting-default-location")).toBeDisabled();
+  await expect(page.locator('[data-weekday="Ma"]')).toBeDisabled();
+  await expect(page.locator("#cancel-button")).toBeHidden();
+  await expect(page.locator("#save-button")).toBeHidden();
+  await expect(page.locator("#add-another-consultant-button")).toHaveText("Nieuw consultant");
+  await expect(page.locator("#done-adding-consultants-button")).toHaveText("OK");
+
+  await page.locator("#add-another-consultant-button").click();
+  await expect(page.locator("#settings-title")).toHaveText("Nieuw consultant");
+  await expect(page.locator("#setting-first-name")).toBeEditable();
+  await expect(page.locator("#setting-first-name")).toHaveValue("");
+  await expect(page.locator("#setting-username")).toHaveValue("");
+
+  await page.locator("#setting-first-name").fill("Playwright");
+  await page.locator("#setting-last-name").fill("Consultant2");
+  await page.locator("#setting-email").fill(`new-consultant-${Date.now()}-2@example.invalid`);
+  await page.locator("#setting-phone").fill("0612345678");
+  await page.locator("#setting-username").fill(secondConsultantUsername);
+  await page.locator("#setting-role").fill("Behandelaar");
+  await page.locator("#setting-default-location").selectOption({ index: 1 });
+  await page.locator("#setting-start-werkdag").fill("09:00");
+  await page.locator("#setting-einde-werkdag").fill("17:00");
+  await page.locator('[data-weekday="Ma"]').check();
+  await page.locator("#save-button").click();
+  await expect(page.locator("#settings-status")).toHaveText("Consultant is aangemaakt. Bewaar de authorisatiecode.");
+  await expect(page.locator("#setting-first-name")).not.toBeEditable();
+
+  await page.locator("#done-adding-consultants-button").click();
+  await expect(page.locator("#settings-title")).toHaveText("Instellingen");
+  await expect(page.locator("#add-consultant-button")).toBeVisible();
+  await expect(page.locator("#setting-username-row")).toBeHidden();
+  await expect(page.locator("#setting-authorisatiecode-row")).toBeHidden();
 });

@@ -16,6 +16,8 @@ function makeAccountBase(firstName, lastName) {
 async function runMigrations(pool) {
   await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS username VARCHAR(80) NOT NULL DEFAULT 'consultant'");
   await pool.query(`ALTER TABLE consultant ADD COLUMN IF NOT EXISTS password VARCHAR(255) NOT NULL DEFAULT '${DEFAULT_CLIENT_PASSWORD}'`);
+  await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS authorisatiecode VARCHAR(8)");
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS consultant_authorisatiecode_unique ON consultant (authorisatiecode) WHERE authorisatiecode IS NOT NULL");
   await pool.query("ALTER TABLE klanten ADD COLUMN IF NOT EXISTS username VARCHAR(80)");
   await pool.query("ALTER TABLE klanten ADD COLUMN IF NOT EXISTS password VARCHAR(255)");
 

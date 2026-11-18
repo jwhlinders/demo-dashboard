@@ -14,6 +14,17 @@ const sessions = new Map();
 const sessionCookie = "agenda_session";
 const trackingCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+function generateAuthorizationCode() {
+  return Array.from(
+    { length: 8 },
+    () => trackingCodeAlphabet[randomInt(trackingCodeAlphabet.length)],
+  ).join("");
+}
+
+function normalizePostcode(value) {
+  return value.trim().replace(/[\s-]/g, "").toUpperCase();
+}
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -38,6 +49,7 @@ function requireLogin(request, response, next) {
 
 app.get("/login", (request, response) => response.sendFile(path.join(__dirname, "login.html")));
 app.get("/register", (request, response) => response.sendFile(path.join(__dirname, "register.html")));
+app.get("/consultant", (request, response) => response.sendFile(path.join(__dirname, "consultant-register.html")));
 app.get("/password-reset-request", (request, response) => response.sendFile(path.join(__dirname, "password-reset-request.html")));
 app.get("/password-reset-status", (request, response) => response.sendFile(path.join(__dirname, "password-reset-status.html")));
 app.get("/change-password", (request, response) => {
@@ -97,6 +109,81 @@ app.post("/api/register", async (request, response, next) => {
     next(error);
   } finally {
     database.release();
+  }
+});
+
+app.post("/api/consultant/verify-registration", async (request, response, next) => {
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const authorisatiecode = typeof request.body?.authorisatiecode === "string"
+    ? request.body.authorisatiecode.trim().toUpperCase()
+    : "";
+  const postcode = typeof request.body?.postcode === "string" ? normalizePostcode(request.body.postcode) : "";
+
+  if (!username || username.length > 80 || !new RegExp(`^[${trackingCodeAlphabet}]{8}$`).test(authorisatiecode) || !/^\d{4}[A-Z]{2}$/.test(postcode)) {
+    return response.status(400).json({ error: "De gebruikersnaam, authorisatiecode of postcode is onjuist." });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM consultant
+        INNER JOIN locaties ON locaties.idlocatie = consultant.defaultlocatie
+        WHERE LOWER(consultant.username) = LOWER($1)
+          AND consultant.authorisatiecode = $2
+          AND REGEXP_REPLACE(UPPER(COALESCE(locaties.postcode, '')), '[[:space:]-]', '', 'g') = $3
+      ) AS verified
+    `, [username, authorisatiecode, postcode]);
+    if (!result.rows[0].verified) {
+      return response.status(400).json({ error: "De gebruikersnaam, authorisatiecode of postcode is onjuist." });
+    }
+    response.json({ verified: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/consultant/register", async (request, response, next) => {
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const authorisatiecode = typeof request.body?.authorisatiecode === "string"
+    ? request.body.authorisatiecode.trim().toUpperCase()
+    : "";
+  const postcode = typeof request.body?.postcode === "string" ? normalizePostcode(request.body.postcode) : "";
+  const password = typeof request.body?.password === "string" ? request.body.password : "";
+  const passwordConfirmation = typeof request.body?.passwordConfirmation === "string"
+    ? request.body.passwordConfirmation
+    : "";
+
+  if (!username || username.length > 80 || !new RegExp(`^[${trackingCodeAlphabet}]{8}$`).test(authorisatiecode) || !/^\d{4}[A-Z]{2}$/.test(postcode)) {
+    return response.status(400).json({ error: "De gebruikersnaam, authorisatiecode of postcode is onjuist." });
+  }
+  if (password !== passwordConfirmation) {
+    return response.status(400).json({ error: "De wachtwoorden komen niet overeen." });
+  }
+  if (password.length < 8 || password.length > 128) {
+    return response.status(400).json({ error: "Kies een wachtwoord van 8 tot 128 tekens." });
+  }
+
+  try {
+    const result = await pool.query(`
+      UPDATE consultant
+      SET password = $1, authorisatiecode = NULL
+      WHERE LOWER(username) = LOWER($2)
+        AND authorisatiecode = $3
+        AND EXISTS (
+          SELECT 1
+          FROM locaties
+          WHERE locaties.idlocatie = consultant.defaultlocatie
+            AND REGEXP_REPLACE(UPPER(COALESCE(locaties.postcode, '')), '[[:space:]-]', '', 'g') = $4
+        )
+      RETURNING username
+    `, [password, username, authorisatiecode, postcode]);
+    if (result.rowCount === 0) {
+      return response.status(400).json({ error: "De gebruikersnaam, authorisatiecode of postcode is onjuist." });
+    }
+    response.json({ message: "Je account is geactiveerd. Je kunt nu inloggen." });
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -500,6 +587,7 @@ app.get("/api/consultant/settings", async (request, response, next) => {
 
     const consultant = { ...result.rows[0], role: session.role };
     if (typeof consultant.password === "string") consultant.password = "********";
+    delete consultant.authorisatiecode;
     response.json(consultant);
   } catch (error) {
     next(error);
@@ -521,6 +609,132 @@ app.get("/api/consultant/settings/locations", async (request, response, next) =>
     response.json(result.rows);
   } catch (error) {
     next(error);
+  }
+});
+
+app.post("/api/consultants", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) {
+    return response.status(403).json({ error: "Alleen een beheerder kan consultants toevoegen." });
+  }
+
+  const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
+  const prefix = typeof request.body?.tussenvoegsel === "string" ? request.body.tussenvoegsel.trim() : "";
+  const lastName = typeof request.body?.achternaam === "string" ? request.body.achternaam.trim() : "";
+  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
+  const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
+  const phone = typeof request.body?.telefoonnummer === "string" ? request.body.telefoonnummer.trim() : "";
+  const functie = typeof request.body?.functie === "string" ? request.body.functie.trim() : "";
+  const startTime = typeof request.body?.start_werkdag === "string" ? request.body.start_werkdag : "";
+  const endTime = typeof request.body?.einde_werkdag === "string" ? request.body.einde_werkdag : "";
+  const fullName = [firstName, prefix, lastName].filter(Boolean).join(" ");
+  const locationId = Number(request.body?.defaultlocatie);
+  const weekdays = request.body?.werkdagen;
+  const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
+  const isValidTime = (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time);
+
+  if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || prefix.length > 80 || fullName.length > 80) {
+    return response.status(400).json({ error: "Vul een geldige voornaam en achternaam in (samen maximaal 80 tekens)." });
+  }
+  if (!/^[a-zA-Z0-9._-]{1,80}$/.test(username)) {
+    return response.status(400).json({ error: "Vul een geldige gebruikersnaam in (maximaal 80 tekens; letters, cijfers, punt, streepje en underscore)." });
+  }
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return response.status(400).json({ error: "Vul een geldig e-mailadres in." });
+  }
+  if (phone.length > 30 || (phone && !/^[+0-9().\-\s]{6,30}$/.test(phone))) {
+    return response.status(400).json({ error: "Vul een geldig telefoonnummer van maximaal 30 tekens in." });
+  }
+  if (!functie || functie.length > 80) {
+    return response.status(400).json({ error: "Vul een functie van maximaal 80 tekens in." });
+  }
+  if (!isValidTime(startTime) || !isValidTime(endTime) || startTime >= endTime) {
+    return response.status(400).json({ error: "Vul geldige werktijden in waarbij de eindtijd na de starttijd ligt." });
+  }
+  if (!Number.isSafeInteger(locationId) || locationId < 1) {
+    return response.status(400).json({ error: "Kies een geldige werklocatie." });
+  }
+  if (!Array.isArray(weekdays) || weekdays.some((weekday) => !validWeekdays.includes(weekday))) {
+    return response.status(400).json({ error: "Kies geldige werkdagen." });
+  }
+
+  const werkdagenValue = validWeekdays.filter((weekday) => weekdays.includes(weekday)).join("");
+  const database = await pool.connect();
+  try {
+    await database.query("BEGIN");
+    await database.query("SELECT pg_advisory_xact_lock(741852963)");
+    const duplicateAccount = await database.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM consultant WHERE LOWER(username) = LOWER($1)
+        UNION ALL
+        SELECT 1 FROM klanten WHERE LOWER(username) = LOWER($1)
+      ) AS username_exists,
+      EXISTS (
+        SELECT 1 FROM consultant WHERE LOWER(email) = LOWER($2)
+        UNION ALL
+        SELECT 1 FROM klanten WHERE LOWER(email) = LOWER($2)
+      ) AS email_exists
+    `, [username, email]);
+    if (duplicateAccount.rows[0].username_exists) {
+      await database.query("ROLLBACK");
+      return response.status(409).json({ error: "Deze gebruikersnaam is al in gebruik." });
+    }
+    if (duplicateAccount.rows[0].email_exists) {
+      await database.query("ROLLBACK");
+      return response.status(409).json({ error: "Er bestaat al een account met dit e-mailadres." });
+    }
+
+    const location = await database.query(
+      "SELECT idlocatie FROM locaties WHERE idlocatie = $1 FOR KEY SHARE",
+      [locationId],
+    );
+    if (location.rowCount === 0) {
+      await database.query("ROLLBACK");
+      return response.status(400).json({ error: "De gekozen werklocatie bestaat niet." });
+    }
+
+    let authorisatiecode;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      authorisatiecode = generateAuthorizationCode();
+      const existingCode = await database.query(
+        "SELECT EXISTS (SELECT 1 FROM consultant WHERE authorisatiecode = $1) AS exists",
+        [authorisatiecode],
+      );
+      if (!existingCode.rows[0].exists) break;
+      authorisatiecode = null;
+    }
+    if (!authorisatiecode) throw new Error("Er kon geen unieke authorisatiecode worden aangemaakt.");
+
+    await database.query(`
+      INSERT INTO consultant (
+        voornaam, tussenvoegsel, achternaam, username, email, functie, telefoonnummer,
+        defaultlocatie, werkdagen, start_werkdag, einde_werkdag, password, authorisatiecode
+      )
+      VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11, $12, $13)
+    `, [
+      firstName,
+      prefix,
+      lastName,
+      username,
+      email,
+      functie,
+      phone,
+      locationId,
+      werkdagenValue,
+      startTime,
+      endTime,
+      defaultClientPassword,
+      authorisatiecode,
+    ]);
+
+    await database.query("COMMIT");
+    response.status(201).json({ message: "Consultant is aangemaakt.", username, authorisatiecode });
+  } catch (error) {
+    await database.query("ROLLBACK");
+    if (error.code === "23505") return response.status(409).json({ error: "De gebruikersnaam, het e-mailadres of de authorisatiecode is al in gebruik." });
+    next(error);
+  } finally {
+    database.release();
   }
 });
 

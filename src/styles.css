@@ -88,15 +88,28 @@ body {
 
 .login-panel #login-form,
 .login-panel #reset-request-form,
-.login-panel #reset-status-form {
+.login-panel #reset-status-form,
+.login-panel #consultant-register-form {
   display: grid;
   grid-template-columns: 112px minmax(0, 20ch);
   gap: 10px;
 }
 
+.login-panel #consultant-register-form .registration-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 20ch);
+  gap: 10px;
+}
+
+.login-panel #consultant-register-form .registration-fields[hidden] {
+  display: none;
+}
+
 .login-panel #login-form .field,
 .login-panel #reset-request-form .field,
-.login-panel #reset-status-form .field {
+.login-panel #reset-status-form .field,
+.login-panel #consultant-register-form .field {
   grid-column: 1 / -1;
   grid-template-columns: 112px minmax(0, 1fr);
   align-items: center;
@@ -105,7 +118,8 @@ body {
 
 .login-panel #login-form input,
 .login-panel #reset-request-form input,
-.login-panel #reset-status-form input {
+.login-panel #reset-status-form input,
+.login-panel #consultant-register-form input {
   width: 100%;
   min-height: 24px;
   padding: 0 8px;
@@ -119,9 +133,28 @@ body {
   grid-column: 1 / -1;
 }
 
+.login-panel #consultant-register-form > .login-error,
+.login-panel #consultant-register-form > .register-success {
+  grid-column: 1 / -1;
+}
+
 .login-panel #login-form > .primary-button,
 .login-panel #reset-request-form > .primary-button,
-.login-panel #reset-status-form > .primary-button {
+.login-panel #reset-status-form > .primary-button,
+.login-panel #consultant-register-form > .primary-button {
+  grid-column: 2;
+  width: 100%;
+  min-height: 24px;
+  padding: 0 8px;
+  justify-self: start;
+}
+
+.login-panel #consultant-register-form .registration-fields > .login-copy {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.login-panel #consultant-register-form .registration-fields > .primary-button {
   grid-column: 2;
   width: 100%;
   min-height: 24px;
@@ -450,6 +483,11 @@ body {
   align-items: center;
   gap: 12px;
   max-width: 820px;
+}
+
+#setting-username-row[hidden],
+#setting-authorisatiecode-row[hidden] {
+  display: none;
 }
 
 .field-row-name,
