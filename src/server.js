@@ -4,7 +4,6 @@ const path = require("node:path");
 const express = require("express");
 const { Pool } = require("pg");
 const { DEFAULT_CLIENT_PASSWORD: defaultClientPassword, makeAccountBase, runMigrations } = require("./migraties");
-const { seedTestData } = require("./testdata");
 
 const scryptAsync = promisify(scrypt);
 const app = express();
@@ -1289,7 +1288,6 @@ async function start() {
   if (!process.env.DATABASE_URL) throw new Error("Stel DATABASE_URL in voordat de server start.");
 
   await runMigrations(pool);
-  await seedTestData(pool);
   app.listen(port, () => console.log(`Agenda beschikbaar op http://localhost:${port}`));
 }
 
