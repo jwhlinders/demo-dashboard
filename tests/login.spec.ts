@@ -29,6 +29,23 @@ test.describe('Loginpagina - functionele testcases', () => {
     await login.goto();
   });
 
+  test('hamburgermenu toont status- en registratiepagina’s', async ({ page }) => {
+    const menuToggle = page.getByRole('button', { name: 'Menu openen' });
+    const menu = page.getByRole('navigation', { name: 'Hoofdnavigatie' });
+
+    await expect(menu).toBeHidden();
+    await menuToggle.click();
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('link', { name: 'Opvragen status' })).toHaveAttribute('href', '/password-reset-status');
+    await expect(menu.getByRole('link', { name: 'Reset wachtwoord' })).toHaveAttribute('href', '/password-reset-request');
+    await expect(menu.getByRole('link', { name: 'Registreer (cliënt)' })).toHaveAttribute('href', '/register');
+    await expect(menu.getByRole('link', { name: 'Registreer (consultant)' })).toHaveAttribute('href', '/consultant');
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(menuToggle).toBeFocused();
+  });
+
   /* ---------------------------- POSITIEF --------------------------- */
 
   test('TC-01: succesvol inloggen met geldige gegevens', async () => {

@@ -53,29 +53,64 @@ body {
   animation: arrive 420ms ease-out both;
 }
 
-.password-reset-status-link {
+.login-menu {
   position: absolute;
   top: 18px;
   right: 18px;
+  z-index: 1;
+}
+
+.login-menu-toggle {
   display: grid;
   width: 36px;
   height: 36px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  border-radius: 7px;
   color: var(--green-dark);
   background: var(--paper);
+  cursor: pointer;
 }
 
-.password-reset-status-link:hover,
-.password-reset-status-link:focus-visible {
+.login-menu-toggle:hover,
+.login-menu-toggle:focus-visible {
   color: var(--green);
   background: var(--green-pale);
 }
 
-.password-reset-status-link svg {
+.login-menu-toggle svg {
   width: 19px;
   height: 19px;
+}
+
+.login-menu-items {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  display: grid;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  box-shadow: 0 12px 28px rgba(32, 42, 38, 0.14);
+}
+
+.login-menu-items[hidden] {
+  display: none;
+}
+
+.login-menu-items a {
+  padding: 10px 12px;
+  border-radius: 4px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.login-menu-items a:hover,
+.login-menu-items a:focus-visible {
+  color: var(--green-dark);
+  background: var(--green-pale);
 }
 
 .login-brand {
