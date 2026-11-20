@@ -35,7 +35,6 @@
           <p class="eyebrow" id="settings-eyebrow">Accountgegevens</p>
           <h1 id="settings-title">Instellingen</h1>
         </div>
-        <button class="secondary-button" id="add-consultant-button" type="button" hidden>Nieuw consultant</button>
       </div>
 
       <form class="settings-form" id="settings-form">
@@ -193,6 +192,9 @@
     let locationsById = new Map();
     let creatingConsultant = false;
     let consultantCreated = false;
+    const isDedicatedConsultantPage = window.location.pathname === "/beheer-consultant";
+    const createConsultantRequested = isDedicatedConsultantPage
+      || new URLSearchParams(window.location.search).get("new-consultant") === "true";
 
     function setConsultantFieldsReadOnly(readOnly) {
       for (const input of document.querySelectorAll("#settings-form input")) {
@@ -212,7 +214,6 @@
       consultantCreated = false;
       document.querySelector("#settings-eyebrow").textContent = isCreating ? "Nieuw account" : "Accountgegevens";
       document.querySelector("#settings-title").textContent = isCreating ? "Nieuw consultant" : "Instellingen";
-      document.querySelector("#add-consultant-button").hidden = isCreating;
       document.querySelector("#password-reset-requests-title").closest(".settings-form").hidden = isCreating;
       document.querySelector("#setting-username-row").hidden = !isCreating;
       document.querySelector("#setting-authorisatiecode-row").hidden = !isCreating;
@@ -334,7 +335,6 @@
         const consultant = result;
         const isBeheerder = typeof consultant.functie === "string"
           && consultant.functie.trim().toLocaleLowerCase("nl-NL") === "beheerder";
-        document.querySelector("#add-consultant-button").hidden = !isBeheerder;
         const fields = {
           voornaam: consultant.voornaam || "",
           tussenvoegsel: consultant.tussenvoegsel || "",
@@ -376,6 +376,10 @@
         const locationLabel = document.querySelector("#consultant-location");
         locationLabel.textContent = fields.defaultlocatie ? `Locatie: ${fields.defaultlocatie}` : "";
         locationLabel.hidden = !fields.defaultlocatie;
+        if (isBeheerder && createConsultantRequested) {
+          setConsultantFormMode(true);
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden geladen.";
         settingsError.hidden = false;
@@ -387,6 +391,10 @@
     });
     document.querySelector("#cancel-button").addEventListener("click", () => {
       if (creatingConsultant) {
+        if (isDedicatedConsultantPage) {
+          window.location.href = "/";
+          return;
+        }
         setConsultantFormMode(false);
         document.querySelector("#settings-status").hidden = true;
         settingsError.hidden = true;
@@ -394,17 +402,16 @@
         window.location.href = "/";
       }
     });
-    document.querySelector("#add-consultant-button").addEventListener("click", () => {
-      setConsultantFormMode(true);
-      document.querySelector("#settings-status").hidden = true;
-      settingsError.hidden = true;
-    });
     document.querySelector("#add-another-consultant-button").addEventListener("click", () => {
       setConsultantFormMode(true);
       document.querySelector("#settings-status").hidden = true;
       settingsError.hidden = true;
     });
     document.querySelector("#done-adding-consultants-button").addEventListener("click", () => {
+      if (isDedicatedConsultantPage) {
+        window.location.href = "/";
+        return;
+      }
       setConsultantFormMode(false);
       document.querySelector("#settings-status").hidden = true;
       settingsError.hidden = true;
@@ -468,8 +475,6 @@
         locationLabel.hidden = false;
         status.textContent = "Instellingen zijn opgeslagen.";
         status.hidden = false;
-        const isBeheerder = document.querySelector("#setting-role").value.trim().toLocaleLowerCase("nl-NL") === "beheerder";
-        document.querySelector("#add-consultant-button").hidden = !isBeheerder;
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden opgeslagen.";
         settingsError.hidden = false;

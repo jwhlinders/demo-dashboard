@@ -17,6 +17,18 @@ test("Status aanvragen navigeert naar de statuspagina voor wachtwoordaanvragen",
   await expect(page.getByRole("heading", { name: "Aanvraagstatus bekijken" })).toBeVisible();
 });
 
+test("vult de gebruikersnaam niet automatisch in vanuit het inlogscherm", async ({ page }) => {
+  await page.goto("/login");
+  await page.evaluate(() => sessionStorage.setItem("passwordResetUsername", "bestaande-gebruiker"));
+  await page.goto("/password-reset-request");
+
+  const username = page.locator("#request-username");
+  await expect(username).toHaveValue("");
+  await expect(username).not.toHaveAttribute("readonly");
+  await username.fill("andere-gebruiker");
+  await expect(username).toHaveValue("andere-gebruiker");
+});
+
 test("TC01: verbergt de verzendknop nadat de statuscode is getoond", async ({ page }) => {
   await page.route("**/api/password-reset-requests", (route) => route.fulfill({
     status: 201,
@@ -100,6 +112,8 @@ test("TC04: meldt dat er geen lopende aanvraag is als het wachtwoord al is gewij
     "Er is geen lopende aanvraag bekend: het wachtwoord is al gewijzigd. Je kunt nu inloggen.",
   );
   await expect(page.locator("#create-password-button")).toBeDisabled();
+  await expect(page.locator("#new-password")).toBeDisabled();
+  await expect(page.locator("#confirm-password")).toBeDisabled();
 });
 
 test("TC05: meldt dat er geen lopende aanvraag is voor de ingevulde gebruikersnaam en statuscode", async ({ page }) => {
@@ -117,6 +131,8 @@ test("TC05: meldt dat er geen lopende aanvraag is voor de ingevulde gebruikersna
     "Er is geen lopende aanvraag bekend met deze gebruikersnaam en statuscode.",
   );
   await expect(page.locator("#status-error")).toBeHidden();
+  await expect(page.locator("#new-password")).toBeDisabled();
+  await expect(page.locator("#confirm-password")).toBeDisabled();
 });
 
 test("TC06: toont een bevestiging na het wijzigen en redirect naar inlogscherm", async ({ page }) => {
@@ -130,11 +146,15 @@ test("TC06: toont een bevestiging na het wijzigen en redirect naar inlogscherm",
   }));
 
   await page.goto("/password-reset-status");
+  await expect(page.locator("#new-password")).toBeDisabled();
+  await expect(page.locator("#confirm-password")).toBeDisabled();
   await page.locator("#reset-username").fill("testgebruiker");
   await page.locator("#tracking-code").fill("ABCD2345");
   await expect(page.locator("#request-status")).toHaveText(
     "Afgehandeld: je kunt nu hieronder een nieuw wachtwoord instellen.",
   );
+  await expect(page.locator("#new-password")).toBeEnabled();
+  await expect(page.locator("#confirm-password")).toBeEnabled();
   await page.locator("#new-password").fill("SterkWachtwoord123");
   await page.locator("#confirm-password").fill("SterkWachtwoord123");
   await page.getByRole("button", { name: "Aanmaken wachtwoord" }).click();

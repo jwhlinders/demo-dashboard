@@ -184,22 +184,27 @@ test("TC-03 Consultant can handle a client's password-reset request", async ({ p
 
 test("TC-04 Consultant cannot add another consultant", async ({ page }) => {
   await login(page, CONFIG.consultant);
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  await expect(page.locator("#manage-consultant-button")).toBeHidden();
   await page.goto("/settings");
 
-  await expect(page.locator("#add-consultant-button")).toBeHidden();
+  await expect(page.locator("#add-consultant-button")).toHaveCount(0);
   const response = await page.request.post(new URL("/api/consultants", page.url()).toString(), {
     data: {},
   });
   expect(response.status()).toBe(403);
+  await page.goto("/beheer-consultant");
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("TC-05 Beheerder can add a consultant and receives a stored authorization code", async ({ page }) => {
   await login(page, CONFIG.beheerder);
-  await page.goto("/settings");
-
-  const addConsultantButton = page.locator("#add-consultant-button");
-  await expect(addConsultantButton).toBeVisible();
-  await addConsultantButton.click();
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  const manageConsultantLink = page.locator("#manage-consultant-button");
+  await expect(manageConsultantLink).toBeVisible();
+  await expect(manageConsultantLink).toHaveAttribute("href", "/beheer-consultant");
+  await manageConsultantLink.click();
+  await expect(page).toHaveURL(/\/beheer-consultant$/);
   await expect(page.locator("#settings-title")).toHaveText("Nieuw consultant");
   await expect(page.locator("#setting-username")).toBeVisible();
   await expect(page.getByLabel("Tussenvoegsel")).toBeVisible();
@@ -237,6 +242,12 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
     [newConsultantUsername],
   );
   expect(storedCode.rows[0].authorisatiecode).toBe(authorisatiecode);
+  const storedPassword = await database!.query(
+    "SELECT password FROM consultant WHERE username = $1",
+    [newConsultantUsername],
+  );
+  expect(storedPassword.rows[0].password).toMatch(/^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/);
+  expect(storedPassword.rows[0].password).not.toBe("Welkom01");
   const storedName = await database!.query(
     "SELECT voornaam, tussenvoegsel, achternaam FROM consultant WHERE username = $1",
     [newConsultantUsername],
@@ -305,10 +316,7 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
   });
 
   await page.locator("#done-adding-consultants-button").click();
-  await expect(page.locator("#settings-title")).toHaveText("Instellingen");
-  await expect(page.locator("#add-consultant-button")).toBeVisible();
-  await expect(page.locator("#setting-username-row")).toBeHidden();
-  await expect(page.locator("#setting-authorisatiecode-row")).toBeHidden();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("TC-06 Consultant can update and save address details", async ({ page }) => {

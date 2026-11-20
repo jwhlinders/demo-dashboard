@@ -22,7 +22,13 @@ test("client can update email and address in their profile", async ({ page }) =>
     expect(profileResponse.ok()).toBeTruthy();
     originalProfile = await profileResponse.json();
 
-    await page.locator("#profile-button").click();
+    await page.getByRole("button", { name: "Menu openen" }).click();
+    const menu = page.getByRole("navigation", { name: "Accountmenu" });
+    await expect(menu.locator("#profile-button")).toBeVisible();
+    await expect(menu.locator("#settings-button")).toBeHidden();
+    await expect(menu.locator("#manage-consultant-button")).toBeHidden();
+    await expect(menu.getByRole("button", { name: "Uitloggen" })).toBeVisible();
+    await menu.locator("#profile-button").click();
     await expect(page.locator("#profile-email")).toHaveValue(originalProfile.email);
     await expect(page.locator("#profile-street")).toHaveValue(originalProfile.straat);
     await expect(page.locator("#profile-postcode")).toHaveValue(originalProfile.postcode);
