@@ -889,6 +889,9 @@ app.post("/api/consultants", async (request, response, next) => {
     }
     if (!authorisatiecode) throw new Error("Er kon geen unieke authorisatiecode worden aangemaakt.");
 
+    const salt = randomBytes(16).toString("hex");
+    const passwordHash = await scryptAsync(defaultClientPassword, salt, 64);
+    const encodedPassword = `scrypt$${salt}$${passwordHash.toString("hex")}`;
     const addressId = await insertAddress(database, consultantAddress);
     await database.query(`
       INSERT INTO consultant (
@@ -908,7 +911,7 @@ app.post("/api/consultants", async (request, response, next) => {
       werkdagenValue,
       startTime,
       endTime,
-      defaultClientPassword,
+      encodedPassword,
       authorisatiecode,
       addressId,
     ]);

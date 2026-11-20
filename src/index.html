@@ -21,12 +21,6 @@
     </div>
     <div class="header-actions">
       <p class="today-label" id="today-label"></p>
-      <button class="profile-button" id="profile-button" type="button" aria-label="Profiel wijzigen" title="Profiel wijzigen" hidden>
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M5 21a7 7 0 0 1 14 0" />
-        </svg>
-      </button>
       <div class="dashboard-menu">
         <button class="dashboard-menu-toggle" id="dashboard-menu-toggle" type="button" aria-label="Menu openen" aria-expanded="false" aria-controls="dashboard-menu">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -34,6 +28,7 @@
           </svg>
         </button>
         <nav class="dashboard-menu-items" id="dashboard-menu" aria-label="Accountmenu" hidden>
+          <button class="dashboard-menu-link profile-button" id="profile-button" type="button" hidden>Profiel</button>
           <a class="dashboard-menu-link settings-button" id="settings-button" href="/settings" hidden>Instellingen</a>
           <a class="dashboard-menu-link manage-consultant-button" id="manage-consultant-button" href="/beheer-consultant" hidden>Beheer consultant</a>
           <button class="dashboard-menu-link logout-button" id="logout-button" type="button">Uitloggen</button>

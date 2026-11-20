@@ -65,12 +65,6 @@
       }
     });
 
-    const loginUsernameInput = document.querySelector("#username");
-    loginUsernameInput.addEventListener("input", () => {
-      const username = loginUsernameInput.value.trim();
-      if (username) sessionStorage.setItem("passwordResetUsername", username);
-      else sessionStorage.removeItem("passwordResetUsername");
-    });
     document.querySelector("#login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
