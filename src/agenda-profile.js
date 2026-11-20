@@ -12,7 +12,10 @@ export function initProfile() {
       const response = await fetch("/api/profile");
       const profile = await response.json();
       if (!response.ok) throw new Error(profile.error || "Profiel laden is mislukt.");
-      for (const fieldName of ["username", "voornaam", "tussenvoegsel", "achternaam", "telefoonnummer"]) {
+      for (const fieldName of [
+        "username", "voornaam", "tussenvoegsel", "achternaam", "email",
+        "telefoonnummer", "straat", "postcode", "woonplaats",
+      ]) {
         profileForm.elements[fieldName].value = profile[fieldName] || "";
       }
       profileDialog.showModal();

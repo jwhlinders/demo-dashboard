@@ -91,6 +91,56 @@ async function saveConsultantAddress(database, username, address) {
   return addressId;
 }
 
+async function saveCustomerAddress(database, username, address) {
+  const current = await database.query(
+    "SELECT idadres FROM klanten WHERE username = $1 FOR UPDATE",
+    [username],
+  );
+  if (current.rowCount === 0) return undefined;
+
+  let addressId = current.rows[0].idadres;
+  if (!address.provided) {
+    if (addressId !== null) {
+      await database.query("UPDATE klanten SET idadres = NULL WHERE username = $1", [username]);
+      await database.query(`
+        DELETE FROM adres
+        WHERE idadres = $1
+          AND NOT EXISTS (SELECT 1 FROM klanten WHERE idadres = $1)
+          AND NOT EXISTS (SELECT 1 FROM consultant WHERE idadres = $1)
+      `, [addressId]);
+    }
+    return null;
+  }
+
+  if (addressId !== null) {
+    const sharedAddress = await database.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM klanten WHERE idadres = $1 AND username <> $2
+        UNION ALL
+        SELECT 1 FROM consultant WHERE idadres = $1
+      ) AS shared
+    `, [addressId, username]);
+    if (!sharedAddress.rows[0].shared) {
+      const updated = await database.query(`
+        UPDATE adres
+        SET straat = $1, postcode = $2, woonplaats = $3
+        WHERE idadres = $4
+        RETURNING idadres
+      `, [address.straat, address.postcode, address.woonplaats, addressId]);
+      if (updated.rowCount === 0) throw new Error("Het huidige klantadres kon niet worden bijgewerkt.");
+      return addressId;
+    }
+  }
+
+  addressId = await insertAddress(database, address);
+  const linked = await database.query(
+    "UPDATE klanten SET idadres = $1 WHERE username = $2",
+    [addressId, username],
+  );
+  if (linked.rowCount !== 1) throw new Error("Het nieuwe klantadres kon niet worden gekoppeld.");
+  return addressId;
+}
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -494,9 +544,14 @@ app.get("/api/profile", async (request, response, next) => {
   try {
     const result = await pool.query(`
       SELECT username, voornaam, COALESCE(tussenvoegsel, '') AS tussenvoegsel,
-             achternaam, COALESCE(telefoonnummer, '') AS telefoonnummer
-      FROM klanten
-      WHERE username = $1
+             achternaam, COALESCE(email, '') AS email,
+             COALESCE(telefoonnummer, '') AS telefoonnummer,
+             COALESCE(address.straat, '') AS straat,
+             COALESCE(address.postcode, '') AS postcode,
+             COALESCE(address.woonplaats, '') AS woonplaats
+      FROM klanten AS customer
+      LEFT JOIN adres AS address ON address.idadres = customer.idadres
+      WHERE customer.username = $1
       LIMIT 1
     `, [session.username]);
     if (result.rowCount === 0) return response.status(404).json({ error: "Profiel niet gevonden." });
@@ -513,7 +568,12 @@ app.patch("/api/profile", async (request, response, next) => {
   const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
   const prefix = typeof request.body?.tussenvoegsel === "string" ? request.body.tussenvoegsel.trim() : "";
   const lastName = typeof request.body?.achternaam === "string" ? request.body.achternaam.trim() : "";
+  const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
   const phone = typeof request.body?.telefoonnummer === "string" ? request.body.telefoonnummer.trim() : "";
+  const customerAddress = readConsultantAddress(request.body);
+  const addressFieldsProvided = ["straat", "postcode", "woonplaats"].some(
+    (fieldName) => Object.prototype.hasOwnProperty.call(request.body || {}, fieldName),
+  );
   const password = typeof request.body?.password === "string" ? request.body.password : "";
   const passwordConfirmation = typeof request.body?.passwordConfirmation === "string" ? request.body.passwordConfirmation : "";
   const fullName = [firstName, prefix, lastName].filter(Boolean).join(" ");
@@ -521,9 +581,14 @@ app.patch("/api/profile", async (request, response, next) => {
   if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || prefix.length > 80 || fullName.length > 80) {
     return response.status(400).json({ error: "Vul een geldige voornaam en achternaam in (samen maximaal 80 tekens)." });
   }
+  if (!email || email.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return response.status(400).json({ error: "Vul een geldig e-mailadres in van maximaal 100 tekens." });
+  }
   if (phone.length > 30 || (phone && !/^[+0-9().\-\s]{6,30}$/.test(phone))) {
     return response.status(400).json({ error: "Vul een geldig telefoonnummer van maximaal 30 tekens in." });
   }
+  const addressError = validateConsultantAddress(customerAddress, false);
+  if (addressError) return response.status(400).json({ error: addressError });
   if (password !== passwordConfirmation) {
     return response.status(400).json({ error: "De wachtwoorden komen niet overeen." });
   }
@@ -534,7 +599,29 @@ app.patch("/api/profile", async (request, response, next) => {
   const database = await pool.connect();
   try {
     await database.query("BEGIN");
-    const updates = [firstName, prefix || null, lastName, phone || null, session.username];
+    await database.query("SELECT pg_advisory_xact_lock(741852963)");
+    const duplicateEmail = await database.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM klanten
+        WHERE LOWER(email) = $1 AND LOWER(username) <> LOWER($2)
+        UNION ALL
+        SELECT 1 FROM consultant WHERE LOWER(email) = $1
+      ) AS exists
+    `, [email, session.username]);
+    if (duplicateEmail.rows[0].exists) {
+      await database.query("ROLLBACK");
+      return response.status(409).json({ error: "Er bestaat al een account met dit e-mailadres." });
+    }
+
+    if (addressFieldsProvided) {
+      const addressId = await saveCustomerAddress(database, session.username, customerAddress);
+      if (addressId === undefined) {
+        await database.query("ROLLBACK");
+        return response.status(404).json({ error: "Profiel niet gevonden." });
+      }
+    }
+
+    const updates = [firstName, prefix || null, lastName, phone || null, email];
     let passwordUpdate = "";
     if (password) {
       const salt = randomBytes(16).toString("hex");
@@ -542,11 +629,12 @@ app.patch("/api/profile", async (request, response, next) => {
       updates.push(`scrypt$${salt}$${passwordHash.toString("hex")}`);
       passwordUpdate = `, password = $${updates.length}`;
     }
+    updates.push(session.username);
     const result = await database.query(`
       UPDATE klanten
       SET voornaam = $1, tussenvoegsel = $2, achternaam = $3,
-          telefoonnummer = $4${passwordUpdate}
-      WHERE username = $5
+          telefoonnummer = $4, email = $5${passwordUpdate}
+      WHERE username = $${updates.length}
       RETURNING username
     `, updates);
     if (result.rowCount === 0) {
@@ -559,6 +647,9 @@ app.patch("/api/profile", async (request, response, next) => {
     response.json({ message: "Je profiel is bijgewerkt.", name: fullName });
   } catch (error) {
     await database.query("ROLLBACK");
+    if (error.code === "23505") {
+      return response.status(409).json({ error: "Er bestaat al een account met dit e-mailadres." });
+    }
     next(error);
   } finally {
     database.release();
