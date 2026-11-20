@@ -110,7 +110,8 @@ test("consultant activates an account with their username and one-time authoriza
     "SELECT password, authorisatiecode FROM consultant WHERE username = $1",
     [username],
   );
-  expect(account.rows[0].password).toBe("ConsultantPass2026!");
+  expect(account.rows[0].password).toMatch(/^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/);
+  expect(account.rows[0].password).not.toBe("ConsultantPass2026!");
   expect(account.rows[0].authorisatiecode).toBeNull();
 
   const reusedCodeResponse = await page.request.post(
