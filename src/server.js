@@ -357,7 +357,7 @@ app.post("/api/password-reset-requests", async (request, response, next) => {
     if (!inserted) throw new Error("Er kon geen unieke statuscode worden aangemaakt.");
     await database.query("COMMIT");
     response.json({
-      message: "Als deze gebruikersnaam bij een cliëntaccount hoort, is de aanvraag bij de beheerder ingediend.",
+      message: "Als deze gebruikersnaam bij een account hoort, is de aanvraag bij de beheerder ingediend.",
       trackingCode,
     });
   } catch (error) {
@@ -444,15 +444,24 @@ app.post("/api/password-reset-complete", async (request, response, next) => {
 
     const salt = randomBytes(16).toString("hex");
     const passwordHash = await scryptAsync(password, salt, 64);
-    const clientResult = await database.query(`
+    const encodedPassword = `scrypt$${salt}$${passwordHash.toString("hex")}`;
+    const consultantResult = await database.query(`
+      UPDATE consultant
+      SET password = $1
+      WHERE LOWER(username) = LOWER($2)
+      RETURNING username
+    `, [encodedPassword, resetRequest.client_username]);
+    const accountResult = consultantResult.rowCount > 0
+      ? consultantResult
+      : await database.query(`
       UPDATE klanten
       SET password = $1
       WHERE LOWER(username) = LOWER($2)
       RETURNING username
-    `, [`scrypt$${salt}$${passwordHash.toString("hex")}`, resetRequest.client_username]);
-    if (clientResult.rowCount === 0) {
+    `, [encodedPassword, resetRequest.client_username]);
+    if (accountResult.rowCount === 0) {
       await database.query("ROLLBACK");
-      return response.status(404).json({ error: "Geen cliëntaccount gevonden voor deze aanvraag." });
+      return response.status(404).json({ error: "Geen account gevonden voor deze aanvraag." });
     }
     await database.query(
       "UPDATE password_reset_requests SET password_changed_at = NOW() WHERE id = $1",
