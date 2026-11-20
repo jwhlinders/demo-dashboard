@@ -70,10 +70,28 @@
           <input id="profile-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" required>
         </label>
       </div>
+      <label class="field" for="profile-email">
+        <span>E-mailadres</span>
+        <input id="profile-email" name="email" type="email" maxlength="100" autocomplete="email" required>
+      </label>
       <label class="field" for="profile-phone">
         <span>Telefoonnummer</span>
         <input id="profile-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
       </label>
+      <label class="field" for="profile-street">
+        <span>Straat en huisnummer</span>
+        <input id="profile-street" name="straat" type="text" maxlength="100" autocomplete="street-address">
+      </label>
+      <div class="profile-name-fields">
+        <label class="field" for="profile-postcode">
+          <span>Postcode</span>
+          <input id="profile-postcode" name="postcode" type="text" maxlength="7" autocomplete="postal-code">
+        </label>
+        <label class="field" for="profile-city">
+          <span>Woonplaats</span>
+          <input id="profile-city" name="woonplaats" type="text" maxlength="50" autocomplete="address-level2">
+        </label>
+      </div>
       <label class="field" for="profile-password">
         <span>Nieuw wachtwoord <span class="optional">optioneel</span></span>
         <input id="profile-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Laat leeg om niet te wijzigen">
