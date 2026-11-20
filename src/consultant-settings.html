@@ -193,6 +193,9 @@
     let locationsById = new Map();
     let creatingConsultant = false;
     let consultantCreated = false;
+    const isDedicatedConsultantPage = window.location.pathname === "/beheer-consultant";
+    const createConsultantRequested = isDedicatedConsultantPage
+      || new URLSearchParams(window.location.search).get("new-consultant") === "true";
 
     function setConsultantFieldsReadOnly(readOnly) {
       for (const input of document.querySelectorAll("#settings-form input")) {
@@ -376,6 +379,10 @@
         const locationLabel = document.querySelector("#consultant-location");
         locationLabel.textContent = fields.defaultlocatie ? `Locatie: ${fields.defaultlocatie}` : "";
         locationLabel.hidden = !fields.defaultlocatie;
+        if (isBeheerder && createConsultantRequested) {
+          setConsultantFormMode(true);
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden geladen.";
         settingsError.hidden = false;
@@ -387,6 +394,10 @@
     });
     document.querySelector("#cancel-button").addEventListener("click", () => {
       if (creatingConsultant) {
+        if (isDedicatedConsultantPage) {
+          window.location.href = "/";
+          return;
+        }
         setConsultantFormMode(false);
         document.querySelector("#settings-status").hidden = true;
         settingsError.hidden = true;
@@ -405,6 +416,10 @@
       settingsError.hidden = true;
     });
     document.querySelector("#done-adding-consultants-button").addEventListener("click", () => {
+      if (isDedicatedConsultantPage) {
+        window.location.href = "/";
+        return;
+      }
       setConsultantFormMode(false);
       document.querySelector("#settings-status").hidden = true;
       settingsError.hidden = true;

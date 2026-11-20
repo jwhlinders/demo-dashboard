@@ -177,6 +177,11 @@ app.get("/settings", requireLogin, (request, response) => {
   if (!session || session.role !== "consultant") return response.redirect("/");
   response.sendFile(path.join(__dirname, "consultant-settings.html"));
 });
+app.get("/beheer-consultant", requireLogin, (request, response) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) return response.redirect("/");
+  response.sendFile(path.join(__dirname, "consultant-settings.html"));
+});
 
 app.post("/api/register", async (request, response, next) => {
   const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
@@ -677,7 +682,7 @@ app.use(requireLogin);
 
 app.get("/api/consultant", async (request, response, next) => {
   const session = getSession(request);
-  if (session.role === "client") return response.json({ name: session.name, role: session.role });
+  if (session.role === "client") return response.json({ name: session.name, role: session.role, isBeheerder: false });
 
   try {
     const result = await pool.query(`
@@ -701,7 +706,13 @@ app.get("/api/consultant", async (request, response, next) => {
     const name = [consultant.first_name, consultant.prefix, consultant.last_name]
       .filter(Boolean)
       .join(" ");
-    response.json({ name: name || "Agenda", role: session.role, locationName: consultant.location_name, werkdagen: consultant.werkdagen });
+    response.json({
+      name: name || "Agenda",
+      role: session.role,
+      isBeheerder: session.isBeheerder === true,
+      locationName: consultant.location_name,
+      werkdagen: consultant.werkdagen,
+    });
   } catch (error) {
     next(error);
   }

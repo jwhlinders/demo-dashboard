@@ -27,19 +27,18 @@
           <path d="M5 21a7 7 0 0 1 14 0" />
         </svg>
       </button>
-      <button class="settings-button" id="settings-button" type="button" aria-label="Instellingen" title="Instellingen" hidden>
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3.3" />
-          <path d="M19.4 15a7.64 7.64 0 0 0 .08-1l1.9-1.5-1.8-3.1-2.4 1a6.94 6.94 0 0 0-1.7-1L14.7 4h-5.4l-.5 2.4a6.94 6.94 0 0 0-1.7 1l-2.4-1-1.8 3.1L4.5 14a7.64 7.64 0 0 0 .08 1l-1.9 1.5 1.8 3.1 2.4-1c.5.4 1.1.8 1.7 1l.5 2.4h5.4l.5-2.4c.6-.2 1.2-.6 1.7-1l2.4 1 1.8-3.1-1.9-1.5Z" />
-        </svg>
-      </button>
-      <button class="logout-button" id="logout-button" type="button" aria-label="Uitloggen" title="Uitloggen">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 17l5-5-5-5" />
-          <path d="M15 12H3" />
-          <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
-        </svg>
-      </button>
+      <div class="dashboard-menu">
+        <button class="dashboard-menu-toggle" id="dashboard-menu-toggle" type="button" aria-label="Menu openen" aria-expanded="false" aria-controls="dashboard-menu">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <nav class="dashboard-menu-items" id="dashboard-menu" aria-label="Accountmenu" hidden>
+          <a class="dashboard-menu-link settings-button" id="settings-button" href="/settings" hidden>Instellingen</a>
+          <a class="dashboard-menu-link manage-consultant-button" id="manage-consultant-button" href="/beheer-consultant" hidden>Beheer consultant</a>
+          <button class="dashboard-menu-link logout-button" id="logout-button" type="button">Uitloggen</button>
+        </nav>
+      </div>
     </div>
   </header>
 

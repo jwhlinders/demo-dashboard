@@ -93,7 +93,10 @@ test("TC-01: consultant kan inloggen en de volledige naam en locatie zien", asyn
 });
 
 test("TC-02: consultant kan instellingen bekijken en werkdagen wijzigen", async ({ page }) => {
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  await expect(page.getByRole("button", { name: "Uitloggen" })).toBeVisible();
   await expect(page.locator("#settings-button")).toBeVisible();
+  await expect(page.locator("#settings-button")).toHaveAttribute("href", "/settings");
   await page.locator("#settings-button").click();
 
   await expect(page).toHaveURL(/\/settings$/);
