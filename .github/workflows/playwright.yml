@@ -33,6 +33,7 @@ jobs:
       E2E_CLIENT_PASSWORD: CIClient2026!
       E2E_2ND_CLIENT_USERNAME: ci-clientb
       E2E_2ND_CLIENT_PASSWORD: CIClient2026!
+      ADMIN_INITIAL_PASSWORD: Admin01!
 
     steps:
       - name: Check out repository

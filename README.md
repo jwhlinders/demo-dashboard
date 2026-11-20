@@ -6,12 +6,12 @@ De applicatiecode en webbestanden staan in `src/`. Playwright-tests en testfixtu
 ## Starten met PostgreSQL
 
 1. Maak een PostgreSQL-database aan, bijvoorbeeld `mijn_dashboard`.
-2. Kopieer `.env.example` naar `.env` en vul `DATABASE_URL` in met de gegevens van je database.
+2. Kopieer `.env.example` naar `.env` en vul `DATABASE_URL` in met de gegevens van je database. Als de tabel `consultant` nog niet bestaat, stel dan ook `ADMIN_INITIAL_PASSWORD` in op een wachtwoord van 8 tot 128 tekens.
 3. Installeer de dependencies met `npm install`.
 4. Start de app met `npm start`.
 5. Open `http://localhost:3000`.
 
-De server voert bij het opstarten database-migraties uit en maakt de tabellen `appointments` en `adres` automatisch aan als die ontbreken. De adresverwijzing loopt via `klanten.idadres` en `consultant.idadres`, die verwijzen naar `adres.idadres`. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
+De server voert bij het opstarten database-migraties uit en maakt de tabellen `locaties`, `adres`, `consultant`, `klanten` en `appointments` automatisch aan als die ontbreken. Als `consultant` nog niet bestaat, wordt de beheerder `admin00` (`beheerder@dashboard.nl`) aangemaakt met `ADMIN_INITIAL_PASSWORD`; adres en locatie blijven leeg. De adresverwijzing loopt via `klanten.idadres` en `consultant.idadres`, die verwijzen naar `adres.idadres`. Afspraken verwijzen naar cliënten via hun `username`; de volledige naam wordt bij het tonen opgehaald uit `klanten`. Bewaar `.env` geheim en stel de app niet publiek beschikbaar zonder passende toegangsbescherming; afspraken bevatten persoonsgegevens.
 
 ## Lokale testaccounts
 

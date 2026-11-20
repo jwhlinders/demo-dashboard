@@ -13,265 +13,100 @@ function makeAccountBase(firstName, lastName) {
   return (accountBase || "client").slice(0, 80);
 }
 
-async function migrateCustomerAddresses(pool) {
-  const database = await pool.connect();
-  try {
-    await database.query("BEGIN");
-    const tables = await database.query(`
-      SELECT to_regclass('klanten') IS NOT NULL AS customers_exists,
-             to_regclass('adres') IS NOT NULL AS addresses_exists
-    `);
-    if (!tables.rows[0].addresses_exists) {
-      await database.query("COMMIT");
-      return;
-    }
-
-    await database.query("ALTER TABLE adres ADD COLUMN IF NOT EXISTS postcode VARCHAR(6)");
-    await database.query("ALTER TABLE adres ADD COLUMN IF NOT EXISTS woonplaats VARCHAR(50)");
-    if (!tables.rows[0].customers_exists) {
-      await database.query("COMMIT");
-      return;
-    }
-
-    const columns = await database.query(`
-      SELECT table_name, column_name
-      FROM information_schema.columns
-      WHERE table_schema = current_schema()
-        AND table_name IN ('klanten', 'adres')
-    `);
-    const hasColumn = (tableName, columnName) => columns.rows.some(
-      (column) => column.table_name === tableName && column.column_name === columnName,
-    );
-    if (!hasColumn("adres", "idklant")) {
-      const addressType = await database.query(`
-        SELECT format_type(attribute.atttypid, attribute.atttypmod) AS data_type
-        FROM pg_attribute AS attribute
-        WHERE attribute.attrelid = to_regclass('adres')
-          AND attribute.attname = 'idadres'
-          AND NOT attribute.attisdropped
-      `);
-      if (addressType.rowCount === 0) {
-        throw new Error("Cannot migrate customer addresses: expected adres.idadres column.");
-      }
-      const customerAddressType = await database.query(`
-        SELECT format_type(attribute.atttypid, attribute.atttypmod) AS data_type
-        FROM pg_attribute AS attribute
-        WHERE attribute.attrelid = to_regclass('klanten')
-          AND attribute.attname = 'idadres'
-          AND NOT attribute.attisdropped
-      `);
-      if (
-        customerAddressType.rowCount > 0
-        && customerAddressType.rows[0].data_type !== addressType.rows[0].data_type
-      ) {
-        throw new Error("Cannot migrate customer addresses: klanten.idadres has a different type from adres.idadres.");
-      }
-      if (customerAddressType.rowCount === 0) {
-        await database.query(`ALTER TABLE klanten ADD COLUMN idadres ${addressType.rows[0].data_type}`);
-      }
-
-      const matchingForeignKey = await database.query(`
-        SELECT pg_get_constraintdef(oid) AS definition
-        FROM pg_constraint
-        WHERE conrelid = to_regclass('klanten')
-          AND contype = 'f'
-          AND pg_get_constraintdef(oid) = 'FOREIGN KEY (idadres) REFERENCES adres(idadres)'
-      `);
-      if (matchingForeignKey.rowCount === 0) {
-        const namedForeignKey = await database.query(`
-          SELECT pg_get_constraintdef(oid) AS definition
-          FROM pg_constraint
-          WHERE conrelid = to_regclass('klanten')
-            AND conname = 'klanten_idadres_fkey'
-        `);
-        if (
-          namedForeignKey.rowCount > 0
-          && namedForeignKey.rows[0].definition !== "FOREIGN KEY (idadres) REFERENCES adres(idadres)"
-        ) {
-          throw new Error("Cannot migrate customer addresses: klanten_idadres_fkey already exists with a different definition.");
-        }
-        if (namedForeignKey.rowCount === 0) {
-          await database.query(`
-            ALTER TABLE klanten
-              ADD CONSTRAINT klanten_idadres_fkey
-              FOREIGN KEY (idadres) REFERENCES adres (idadres)
-          `);
-        }
-      }
-      await database.query("COMMIT");
-      return;
-    }
-    if (!hasColumn("adres", "idadres") || !hasColumn("klanten", "id")) {
-      throw new Error("Cannot migrate customer addresses: expected adres.idadres and klanten.id columns.");
-    }
-
-    await database.query("LOCK TABLE klanten, adres IN ACCESS EXCLUSIVE MODE");
-    const addressType = await database.query(`
-      SELECT format_type(attribute.atttypid, attribute.atttypmod) AS data_type
-      FROM pg_attribute AS attribute
-      WHERE attribute.attrelid = to_regclass('adres')
-        AND attribute.attname = 'idadres'
-        AND NOT attribute.attisdropped
-    `);
-    const customerAddressType = await database.query(`
-      SELECT format_type(attribute.atttypid, attribute.atttypmod) AS data_type
-      FROM pg_attribute AS attribute
-      WHERE attribute.attrelid = to_regclass('klanten')
-        AND attribute.attname = 'idadres'
-        AND NOT attribute.attisdropped
-    `);
-    if (customerAddressType.rowCount > 0 && customerAddressType.rows[0].data_type !== addressType.rows[0].data_type) {
-      throw new Error("Cannot migrate customer addresses: klanten.idadres has a different type from adres.idadres.");
-    }
-    if (customerAddressType.rowCount === 0) {
-      await database.query(`ALTER TABLE klanten ADD COLUMN idadres ${addressType.rows[0].data_type}`);
-    }
-
-    const multipleAddresses = await database.query(`
-      SELECT idklant
-      FROM adres
-      WHERE idklant IS NOT NULL
-      GROUP BY idklant
-      HAVING COUNT(*) > 1
-      LIMIT 1
-    `);
-    if (multipleAddresses.rowCount > 0) {
-      throw new Error(`Cannot migrate customer addresses: customer ${multipleAddresses.rows[0].idklant} has multiple addresses.`);
-    }
-    const orphanedAddress = await database.query(`
-      SELECT address.idadres, address.idklant
-      FROM adres AS address
-      LEFT JOIN klanten AS customer ON customer.id = address.idklant
-      WHERE address.idklant IS NOT NULL
-        AND customer.id IS NULL
-      LIMIT 1
-    `);
-    if (orphanedAddress.rowCount > 0) {
-      throw new Error(`Cannot migrate customer addresses: address ${orphanedAddress.rows[0].idadres} references missing customer ${orphanedAddress.rows[0].idklant}.`);
-    }
-    const conflictingAddress = await database.query(`
-      SELECT customer.id
-      FROM klanten AS customer
-      INNER JOIN adres AS address ON address.idklant = customer.id
-      WHERE customer.idadres IS NOT NULL
-        AND customer.idadres <> address.idadres
-      LIMIT 1
-    `);
-    if (conflictingAddress.rowCount > 0) {
-      throw new Error(`Cannot migrate customer addresses: customer ${conflictingAddress.rows[0].id} already references a different address.`);
-    }
-
-    await database.query(`
-      UPDATE klanten AS customer
-      SET idadres = address.idadres
-      FROM adres AS address
-      WHERE address.idklant = customer.id
-        AND customer.idadres IS NULL
-    `);
-    await database.query(`
-      ALTER TABLE klanten
-        ADD CONSTRAINT klanten_idadres_fkey
-        FOREIGN KEY (idadres) REFERENCES adres (idadres)
-    `);
-    await database.query("ALTER TABLE adres DROP COLUMN idklant");
-    await database.query("COMMIT");
-  } catch (error) {
-    await database.query("ROLLBACK");
-    throw error;
-  } finally {
-    database.release();
-  }
-}
-
-async function migrateConsultantAddresses(pool) {
-  const database = await pool.connect();
-  try {
-    await database.query("BEGIN");
-    const tables = await database.query(`
-      SELECT to_regclass('consultant') IS NOT NULL AS consultants_exists,
-             to_regclass('adres') IS NOT NULL AS addresses_exists
-    `);
-    if (!tables.rows[0].consultants_exists || !tables.rows[0].addresses_exists) {
-      await database.query("COMMIT");
-      return;
-    }
-
-    await database.query("LOCK TABLE consultant, adres IN ACCESS EXCLUSIVE MODE");
-    const addressType = await database.query(`
-      SELECT format_type(attribute.atttypid, attribute.atttypmod) AS data_type
-      FROM pg_attribute AS attribute
-      WHERE attribute.attrelid = to_regclass('adres')
-        AND attribute.attname = 'idadres'
-        AND NOT attribute.attisdropped
-    `);
-    if (addressType.rowCount === 0) {
-      throw new Error("Cannot migrate consultant addresses: expected adres.idadres column.");
-    }
-    const consultantAddressType = await database.query(`
-      SELECT format_type(attribute.atttypid, attribute.atttypmod) AS data_type
-      FROM pg_attribute AS attribute
-      WHERE attribute.attrelid = to_regclass('consultant')
-        AND attribute.attname = 'idadres'
-        AND NOT attribute.attisdropped
-    `);
-    if (
-      consultantAddressType.rowCount > 0
-      && consultantAddressType.rows[0].data_type !== addressType.rows[0].data_type
-    ) {
-      throw new Error("Cannot migrate consultant addresses: consultant.idadres has a different type from adres.idadres.");
-    }
-    if (consultantAddressType.rowCount === 0) {
-      await database.query(`ALTER TABLE consultant ADD COLUMN idadres ${addressType.rows[0].data_type}`);
-    }
-
-    const matchingForeignKey = await database.query(`
-      SELECT pg_get_constraintdef(oid) AS definition
-      FROM pg_constraint
-      WHERE conrelid = to_regclass('consultant')
-        AND contype = 'f'
-        AND pg_get_constraintdef(oid) = 'FOREIGN KEY (idadres) REFERENCES adres(idadres)'
-    `);
-    if (matchingForeignKey.rowCount === 0) {
-      const namedForeignKey = await database.query(`
-        SELECT pg_get_constraintdef(oid) AS definition
-        FROM pg_constraint
-        WHERE conrelid = to_regclass('consultant')
-          AND conname = 'consultant_idadres_fkey'
-      `);
-      if (
-        namedForeignKey.rowCount > 0
-        && namedForeignKey.rows[0].definition !== "FOREIGN KEY (idadres) REFERENCES adres(idadres)"
-      ) {
-        throw new Error("Cannot migrate consultant addresses: consultant_idadres_fkey already exists with a different definition.");
-      }
-      if (namedForeignKey.rowCount === 0) {
-        await database.query(`
-          ALTER TABLE consultant
-            ADD CONSTRAINT consultant_idadres_fkey
-            FOREIGN KEY (idadres) REFERENCES adres (idadres)
-        `);
-      }
-    }
-    await database.query("COMMIT");
-  } catch (error) {
-    await database.query("ROLLBACK");
-    throw error;
-  } finally {
-    database.release();
-  }
-}
-
 async function runMigrations(pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS adres (
-      idadres INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-      straat VARCHAR(100) NOT NULL,
-      postcode VARCHAR(6),
-      woonplaats VARCHAR(50)
-    )
-  `);
-  await migrateCustomerAddresses(pool);
-  await migrateConsultantAddresses(pool);
+  const database = await pool.connect();
+  try {
+    await database.query("BEGIN");
+    await database.query("SELECT pg_advisory_xact_lock(741852964)");
+    const consultantTable = await database.query(
+      "SELECT to_regclass('consultant') IS NOT NULL AS consultant_exists",
+    );
+    const createAdmin = !consultantTable.rows[0].consultant_exists;
+    const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    if (
+      createAdmin
+      && (
+        typeof initialAdminPassword !== "string"
+        || initialAdminPassword.length < 8
+        || initialAdminPassword.length > 128
+      )
+    ) {
+      throw new Error("Set ADMIN_INITIAL_PASSWORD to 8-128 characters before initializing the consultant table.");
+    }
+
+    await database.query(`
+      CREATE TABLE IF NOT EXISTS locaties (
+        id INTEGER PRIMARY KEY,
+        naam VARCHAR(100) NOT NULL,
+        adres VARCHAR(100),
+        postcode VARCHAR(6),
+        plaats VARCHAR(50),
+        telefoonnummer VARCHAR(12),
+        actief BIT(1),
+        idlocatie INTEGER NOT NULL UNIQUE
+      )
+    `);
+    await database.query(`
+      CREATE TABLE IF NOT EXISTS adres (
+        idadres INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+        straat VARCHAR(100) NOT NULL,
+        postcode VARCHAR(6),
+        woonplaats VARCHAR(50)
+      )
+    `);
+    await database.query(`
+      CREATE TABLE IF NOT EXISTS consultant (
+        id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+        achternaam TEXT NOT NULL,
+        email TEXT NOT NULL,
+        functie TEXT,
+        telefoonnummer TEXT,
+        defaultlocatie INTEGER REFERENCES locaties (idlocatie),
+        aanmaakdatum TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        werkdagen TEXT,
+        start_werkdag TEXT,
+        einde_werkdag TEXT,
+        start_pauze TEXT,
+        voornaam TEXT,
+        tussenvoegsel TEXT,
+        username VARCHAR(80) NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        idadres INTEGER REFERENCES adres (idadres)
+      )
+    `);
+    await database.query(`
+      CREATE TABLE IF NOT EXISTS klanten (
+        id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+        voornaam VARCHAR(50) NOT NULL,
+        achternaam VARCHAR(50) NOT NULL,
+        email VARCHAR(100) UNIQUE,
+        aanmaakdatum TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        tussenvoegsel VARCHAR(255),
+        telefoonnummer VARCHAR(15),
+        username VARCHAR(80),
+        password VARCHAR(255),
+        fullname VARCHAR(125),
+        idadres INTEGER REFERENCES adres (idadres)
+      )
+    `);
+    if (createAdmin) {
+      const salt = randomBytes(16).toString("hex");
+      const passwordHash = await scryptAsync(initialAdminPassword, salt, 64);
+      await database.query(`
+        INSERT INTO consultant (voornaam, achternaam, functie, email, username, password)
+        VALUES ('Admin', 'Beheerder', 'Beheerder', 'beheerder@dashboard.nl', 'admin00', $1)
+      `, [`scrypt$${salt}$${passwordHash.toString("hex")}`]);
+    }
+    await database.query("COMMIT");
+  } catch (error) {
+    await database.query("ROLLBACK");
+    throw error;
+  } finally {
+    database.release();
+  }
+
   await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS username VARCHAR(80) NOT NULL DEFAULT 'consultant'");
   await pool.query(`ALTER TABLE consultant ADD COLUMN IF NOT EXISTS password VARCHAR(255) NOT NULL DEFAULT '${DEFAULT_CLIENT_PASSWORD}'`);
   await pool.query("ALTER TABLE consultant ADD COLUMN IF NOT EXISTS authorisatiecode VARCHAR(8)");
@@ -467,7 +302,5 @@ async function runMigrations(pool) {
 module.exports = {
   DEFAULT_CLIENT_PASSWORD,
   makeAccountBase,
-  migrateConsultantAddresses,
-  migrateCustomerAddresses,
   runMigrations,
 };

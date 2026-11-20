@@ -473,8 +473,18 @@ app.post("/api/login", async (request, response, next) => {
     let role = "consultant";
     let name = account && [account.voornaam, account.tussenvoegsel, account.achternaam].filter(Boolean).join(" ");
 
-    if (account && account.password !== password) {
-      return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+    if (account) {
+      const encodedPassword = account.password || "";
+      let passwordMatches = encodedPassword === password;
+      if (!passwordMatches && /^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/.test(encodedPassword)) {
+        const [, salt, expectedHex] = encodedPassword.split("$");
+        const expectedHash = Buffer.from(expectedHex, "hex");
+        const suppliedHash = await scryptAsync(password, salt, expectedHash.length);
+        passwordMatches = timingSafeEqual(suppliedHash, expectedHash);
+      }
+      if (!passwordMatches) {
+        return response.status(401).json({ error: "Ongeldige gebruikersnaam of wachtwoord." });
+      }
     }
     if (!account) {
       const clientResult = await pool.query(`
