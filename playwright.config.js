@@ -1,12 +1,12 @@
-const fs = require("node:fs");
-const { defineConfig } = require("@playwright/test");
+import fs from "node:fs";
+import { defineConfig } from "@playwright/test";
 
 if (fs.existsSync(".env")) process.loadEnvFile(".env");
 
 const port = process.env.PLAYWRIGHT_PORT || "3100";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`;
 
-module.exports = defineConfig({
+export default defineConfig({
   testDir: "./tests",
   
   reporter: [

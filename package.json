@@ -4,10 +4,9 @@
   "private": true,
   "scripts": {
     "start": "node --env-file=.env src/server.js",
-    
     "pretest:e2e": "rimraf allure-results",
     "test:e2e": "npx kill-port 3100 && playwright test",
-    "testdata:locaties": "node --env-file=.env src/testdata.js",
+    "testdata:locaties": "node --env-file=.env src/testdata-locaties.js",
     "testdata:consultants": "node --env-file=.env src/testdata-consultants.js",
     "testdata:klanten": "node --env-file=.env src/testdata-klanten.js",
     "testdata:adres": "node --env-file=.env src/testdata-adres.js",
@@ -19,6 +18,7 @@
     "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "allure": "^0.0.0",

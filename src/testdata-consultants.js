@@ -1,75 +1,66 @@
-const { randomInt } = require("node:crypto");
 const { Pool } = require("pg");
+const { fakerNL } = require("@faker-js/faker");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const TEST_PASSWORD = "Test2026!";
 
-function randomMobileNumber() {
-  return `06${String(randomInt(10000000, 100000000)).padStart(8, "0")}`;
+const RECORDS_PER_RUN = 10;
+const MAX_RECORDS_IN_DB = 20;
+
+const MOGELIJKE_FUNCTIES = [
+  "Huisarts",
+  "Psycholoog",
+  "Praktijkondersteuner GGZ",
+  "Fysiotherapeut",
+];
+
+const MOGELIJKE_TUSSENVOEGSELS = [
+  { weight: 80, value: "" },
+  { weight: 6, value: "van" },
+  { weight: 5, value: "de" },
+  { weight: 5, value: "van der" },
+  { weight: 4, value: "van de" },
+];
+
+const MOGELIJKE_WERKDAGEN = [
+  { weight: 50, value: "MaDiWoDoVr" },
+  { weight: 5, value: "MaDiWo" },
+  { weight: 10, value: "MaWo" },
+  { weight: 10, value: "DiDo" },
+  { weight: 25, value: "MaDiWoDo" },
+];
+
+function maakNieuwConsultant() {
+  const voornaam = fakerNL.person.firstName();
+  const tussenvoegsel = fakerNL.helpers.weightedArrayElement(MOGELIJKE_TUSSENVOEGSELS);
+  const achternaam = fakerNL.person.lastName().trim().split(" ").pop();
+
+  // Maak naamdelen schoon voor e-mail en username (kleine letters, geen spaties of leestekens)
+  const schoneVoornaam = voornaam.toLowerCase().replace(/[^a-z]/g, "");
+  const schoneAchternaam = achternaam.toLowerCase().replace(/[^a-z]/g, "");
+
+  return {
+    voornaam,
+    tussenvoegsel,
+    achternaam,
+    username: `${schoneVoornaam.charAt(0)}${schoneAchternaam}`,
+    email: `${schoneVoornaam}.${schoneAchternaam}@example.ta`,
+    functie: fakerNL.helpers.arrayElement(MOGELIJKE_FUNCTIES),
+    werkdagen: fakerNL.helpers.weightedArrayElement(MOGELIJKE_WERKDAGEN),
+    start_werkdag: "08:30",
+    einde_werkdag: "17:00",
+    start_pauze: "12:30",
+    telefoonnummer: `06${fakerNL.string.numeric(8)}`,
+    adres: {
+      straat: `${fakerNL.location.street()} ${fakerNL.location.buildingNumber()}`,
+      huisnummer: fakerNL.location.buildingNumber(),
+      postcode: fakerNL.location.zipCode('####??'), // bijv. '1234AB' (6 tekens)
+      plaats: fakerNL.location.city(),
+    },
+  };
 }
 
-const consultants = [
-  {
-    voornaam: "Eva",
-    tussenvoegsel: "",
-    achternaam: "Mulder",
-    username: "emulder",
-    email: "eva.mulder@example.ta",
-    functie: "Beheerder",
-    werkdagen: "MaDiWoDoVr",
-    start_werkdag: "09:00",
-    einde_werkdag: "17:00",
-    start_pauze: "12:30",
-  },
-  {
-    voornaam: "Jeroen",
-    tussenvoegsel: "de",
-    achternaam: "Dekker",
-    username: "jdekker",
-    email: "jeroen.dekker@example.ta",
-    functie: "Huisarts",
-    werkdagen: "MaDiDoVr",
-    start_werkdag: "08:30",
-    einde_werkdag: "16:30",
-    start_pauze: "12:00",
-  },
-  {
-    voornaam: "Sanne",
-    tussenvoegsel: "",
-    achternaam: "Verhoeven",
-    username: "sverhoeven",
-    email: "sanne.verhoeven@example.ta",
-    functie: "Psycholoog",
-    werkdagen: "MaWoDoVr",
-    start_werkdag: "09:00",
-    einde_werkdag: "17:30",
-    start_pauze: "12:30",
-  },
-  {
-    voornaam: "Thomas",
-    tussenvoegsel: "van",
-    achternaam: "Loon",
-    username: "tvanloon",
-    email: "thomas.vanloon@example.ta",
-    functie: "Praktijkondersteuner GGZ",
-    werkdagen: "DiWoDoVr",
-    start_werkdag: "08:30",
-    einde_werkdag: "16:30",
-    start_pauze: "12:00",
-  },
-  {
-    voornaam: "Nadia",
-    tussenvoegsel: "",
-    achternaam: "Visser",
-    username: "nvisser",
-    email: "nadia.visser@example.ta",
-    functie: "Fysiotherapeut",
-    werkdagen: "MaDiWoDo",
-    start_werkdag: "09:00",
-    einde_werkdag: "17:00",
-    start_pauze: "13:00",
-  },
-];
+const consultants = fakerNL.helpers.multiple(maakNieuwConsultant, { count: RECORDS_PER_RUN });
 
 async function seedConsultants() {
   if (!process.env.DATABASE_URL) {
@@ -89,56 +80,70 @@ async function seedConsultants() {
     if (!tables.rows[0].consultant_table || !tables.rows[0].klanten_table || !tables.rows[0].locaties_table) {
       throw new Error("De tabellen consultant, klanten en locaties ontbreken. Initialiseer eerst het databaseschema.");
     }
+    const existingConsultants = await database.query("SELECT COUNT(*)::int AS aantal FROM consultant");
+    const aantalBestaand = existingConsultants.rows[0].aantal;
+    const maximaleNieuweConsultants = Math.max(0, MAX_RECORDS_IN_DB - aantalBestaand);
+
+    if (maximaleNieuweConsultants === 0) {
+      await database.query("COMMIT");
+      console.log(`Testconsultants toevoegen overgeslagen: er bestaan al ${aantalBestaand} consultants (maximum ${MAX_RECORDS_IN_DB}).`);
+      return;
+    }
 
     const locations = await database.query("SELECT idlocatie FROM locaties ORDER BY idlocatie");
     if (locations.rowCount === 0) {
-      throw new Error("Er zijn geen locaties. Voeg eerst testlocaties toe met `npm run testdata:locaties`.");
+      throw new Error("Er zijn geen locaties. Voeg locaties toe met `npm run testdata:locaties`.");
     }
 
     let created = 0;
-    let phoneNumbersUpdated = 0;
-    for (let index = 0; index < consultants.length; index += 1) {
+
+    for (let index = 0; index < consultants.length && created < maximaleNieuweConsultants; index += 1) {
       const consultant = consultants[index];
-      const existing = await database.query(`
-        SELECT username, email, telefoonnummer
-        FROM consultant
-        WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($2)
-      `, [consultant.username, consultant.email]);
-      const matchingUsername = existing.rows.find(
-        (row) => row.username.toLowerCase() === consultant.username.toLowerCase(),
+
+      // 1. Controleer of de username al bestaat in de tabel consultant
+      const existing = await database.query(
+        "SELECT username FROM consultant WHERE LOWER(username) = LOWER($1)",
+        [consultant.username],
       );
-      const conflictingEmail = existing.rows.find(
-        (row) => row.email.toLowerCase() === consultant.email.toLowerCase()
-          && row.username.toLowerCase() !== consultant.username.toLowerCase(),
-      );
-      if (conflictingEmail) {
-        throw new Error(`Het e-mailadres ${consultant.email} is al gekoppeld aan een ander consultantaccount.`);
-      }
-      if (matchingUsername) {
-        if (!/^06\d{8}$/.test(matchingUsername.telefoonnummer || "")) {
-          await database.query(
-            "UPDATE consultant SET telefoonnummer = $1 WHERE LOWER(username) = LOWER($2)",
-            [randomMobileNumber(), consultant.username],
-          );
-          phoneNumbersUpdated += 1;
-        }
+
+      if (existing.rowCount > 0) {
         continue;
       }
 
+      // 2. Controleer of de username niet al in gebruik is door een cliënt
       const usernameConflict = await database.query(
         "SELECT username FROM klanten WHERE LOWER(username) = LOWER($1)",
         [consultant.username],
       );
+
       if (usernameConflict.rowCount > 0) {
-        throw new Error(`De gebruikersnaam ${consultant.username} is al in gebruik door een cliënt.`);
+        continue;
       }
 
+      // 3. Kies een willekeurige locatie uit alle beschikbare locaties
+      const randomIndex = Math.floor(Math.random() * locations.rows.length);
+      const randomLocatieId = locations.rows[randomIndex].idlocatie;
+
+      // 4a. Voeg eerst het adres toe en vang het nieuwe 'idadres' op
+      const adresResult = await database.query(`
+        INSERT INTO adres (straat, postcode, woonplaats)
+        VALUES ($1, $2, $3)
+        RETURNING idadres
+      `, [
+        consultant.adres.straat,
+        consultant.adres.postcode,
+        consultant.adres.plaats,
+      ]);
+
+      const nieuwAdresId = adresResult.rows[0].idadres;
+
+      // 4. Voeg de nieuwe consultant toe aan de database
       await database.query(`
         INSERT INTO consultant (
           voornaam, tussenvoegsel, achternaam, username, email, functie, telefoonnummer,
-          defaultlocatie, werkdagen, start_werkdag, einde_werkdag, start_pauze, password
+          defaultlocatie, werkdagen, start_werkdag, einde_werkdag, start_pauze, password, idadres
         )
-        VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       `, [
         consultant.voornaam,
         consultant.tussenvoegsel,
@@ -146,20 +151,21 @@ async function seedConsultants() {
         consultant.username,
         consultant.email,
         consultant.functie,
-        randomMobileNumber(),
-        locations.rows[index % locations.rowCount].idlocatie,
+        consultant.telefoonnummer,
+        randomLocatieId,
         consultant.werkdagen,
         consultant.start_werkdag,
         consultant.einde_werkdag,
         consultant.start_pauze,
         TEST_PASSWORD,
+        nieuwAdresId,
       ]);
+
       created += 1;
     }
 
     await database.query("COMMIT");
     console.log(`Testconsultants toegevoegd: ${created}; al aanwezig overgeslagen: ${consultants.length - created}.`);
-    console.log(`Telefoonnummers bijgewerkt naar 06-nummers: ${phoneNumbersUpdated}.`);
     console.log(`Voor alle testconsultants is het tijdelijke wachtwoord: ${TEST_PASSWORD}`);
     console.log("Deze accounts zijn uitsluitend bedoeld voor een lokale testdatabase.");
   } catch (error) {
@@ -176,3 +182,5 @@ seedConsultants()
     process.exitCode = 1;
   })
   .finally(() => pool.end());
+
+
