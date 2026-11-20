@@ -286,6 +286,8 @@ app.post("/api/consultant/register", async (request, response, next) => {
   }
 
   try {
+    const salt = randomBytes(16).toString("hex");
+    const passwordHash = await scryptAsync(password, salt, 64);
     const result = await pool.query(`
       UPDATE consultant
       SET password = $1, authorisatiecode = NULL
@@ -298,7 +300,7 @@ app.post("/api/consultant/register", async (request, response, next) => {
             AND REGEXP_REPLACE(UPPER(COALESCE(adres.postcode, '')), '[[:space:]-]', '', 'g') = $4
         )
       RETURNING username
-    `, [password, username, authorisatiecode, postcode]);
+    `, [`scrypt$${salt}$${passwordHash.toString("hex")}`, username, authorisatiecode, postcode]);
     if (result.rowCount === 0) {
       return response.status(400).json({ error: "De gebruikersnaam, authorisatiecode of postcode is onjuist." });
     }
