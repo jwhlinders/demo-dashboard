@@ -17,6 +17,7 @@
       </div>
     </div>
     <div class="header-actions">
+      <button class="secondary-button" id="back-button" type="button">Terug</button>
       <button class="logout-button" id="logout-button" type="button" aria-label="Uitloggen" title="Uitloggen">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10 17l5-5-5-5" />
@@ -142,7 +143,8 @@
         const consultant = await response.json();
         if (!response.ok) throw new Error(consultant.error || "Gebruikersgegevens konden niet worden geladen.");
 
-        document.querySelector("#consultant-name").textContent = consultant.name || "Agenda";
+        const username = consultant.username ? ` (${consultant.username})` : "";
+        document.querySelector("#consultant-name").textContent = `${consultant.name || "Agenda"}${username}`;
         const locationLabel = document.querySelector("#consultant-location");
         locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
         locationLabel.hidden = !consultant.locationName;
@@ -251,6 +253,10 @@
     });
 
     document.querySelector("#cancel-button").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+
+    document.querySelector("#back-button").addEventListener("click", () => {
       window.location.href = "/";
     });
 

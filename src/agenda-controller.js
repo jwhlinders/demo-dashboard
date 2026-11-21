@@ -34,7 +34,8 @@ async function loadAppointments() {
     setClientSession(isClientSession);
     document.querySelector(".summary").classList.toggle("is-client", isClientSession);
     document.querySelector("#requested-summary").hidden = isClientSession;
-    document.querySelector("#consultant-name").textContent = consultant.name;
+    const username = consultant.username ? ` (${consultant.username})` : "";
+    document.querySelector("#consultant-name").textContent = `${consultant.name}${username}`;
     if (consultant.role !== "client") setConsultantWorkdays(consultant.werkdagen);
     const locationLabel = document.querySelector("#consultant-location");
     locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";

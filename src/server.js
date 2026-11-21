@@ -731,7 +731,14 @@ app.use(requireLogin);
 
 app.get("/api/consultant", async (request, response, next) => {
   const session = getSession(request);
-  if (session.role === "client") return response.json({ name: session.name, role: session.role, isBeheerder: false });
+  if (session.role === "client") {
+    return response.json({
+      name: session.name,
+      username: session.username,
+      role: session.role,
+      isBeheerder: false,
+    });
+  }
 
   try {
     const result = await pool.query(`
@@ -749,7 +756,7 @@ app.get("/api/consultant", async (request, response, next) => {
       WHERE consultant.username = $1
       LIMIT 1
     `, [session.username]);
-    if (result.rowCount === 0) return response.json({ name: "Agenda" });
+    if (result.rowCount === 0) return response.json({ name: "Agenda", username: session.username });
 
     const consultant = result.rows[0];
     const name = [consultant.first_name, consultant.prefix, consultant.last_name]
@@ -757,6 +764,7 @@ app.get("/api/consultant", async (request, response, next) => {
       .join(" ");
     response.json({
       name: name || "Agenda",
+      username: session.username,
       role: session.role,
       isBeheerder: session.isBeheerder === true,
       locationName: consultant.location_name,
