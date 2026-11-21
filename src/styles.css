@@ -597,6 +597,28 @@ body {
   max-width: 820px;
 }
 
+.location-postcode-city {
+  display: grid;
+  grid-template-columns: 132px 11ch 132px minmax(0, 1fr);
+  gap: 12px;
+  max-width: 820px;
+}
+
+.location-postcode-input {
+  width: 11ch;
+  max-width: 100%;
+}
+
+.settings-stack input.location-active-checkbox {
+  width: 15px;
+  min-height: 15px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--green);
+}
+
 #setting-username-row[hidden],
 #setting-authorisatiecode-row[hidden] {
   display: none;
@@ -741,6 +763,10 @@ body {
 
 @media (max-width: 720px) {
   .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .location-postcode-city {
     grid-template-columns: 1fr;
   }
 

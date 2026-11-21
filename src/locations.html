@@ -46,11 +46,9 @@
               <label class="field-label" for="location-address">Adres</label>
               <input id="location-address" name="adres" type="text" maxlength="100" autocomplete="street-address" required>
             </div>
-            <div class="field-row">
+            <div class="location-postcode-city">
               <label class="field-label" for="location-postcode">Postcode</label>
-              <input id="location-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" title="Vul een Nederlandse postcode in, bijvoorbeeld 1234 AB." autocomplete="postal-code" autocapitalize="characters" required>
-            </div>
-            <div class="field-row">
+              <input class="location-postcode-input" id="location-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" title="Vul een Nederlandse postcode in, bijvoorbeeld 1234 AB." autocomplete="postal-code" autocapitalize="characters" required>
               <label class="field-label" for="location-city">Woonplaats</label>
               <input id="location-city" name="woonplaats" type="text" maxlength="50" autocomplete="address-level2" required>
             </div>
@@ -59,11 +57,8 @@
               <input id="location-phone" name="telefoonnummer" type="tel" maxlength="12" autocomplete="tel">
             </div>
             <div class="field-row">
-              <span class="field-label">Status</span>
-              <label class="weekday-option location-active-option">
-                <input id="location-active" name="actief" type="checkbox" checked>
-                <span>Actief</span>
-              </label>
+              <label class="field-label" for="location-active">Actief</label>
+              <input class="location-active-checkbox" id="location-active" name="actief" type="checkbox" checked>
             </div>
           </div>
         </section>
