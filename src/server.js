@@ -24,6 +24,39 @@ function normalizePostcode(value) {
   return value.trim().replace(/[\s-]/g, "").toUpperCase();
 }
 
+function readLocationFields(body) {
+  return {
+    naam: typeof body?.naam === "string" ? body.naam.trim() : "",
+    adres: typeof body?.adres === "string" ? body.adres.trim() : "",
+    postcode: typeof body?.postcode === "string" ? normalizePostcode(body.postcode) : "",
+    plaats: typeof body?.woonplaats === "string" ? body.woonplaats.trim() : "",
+    telefoonnummer: typeof body?.telefoonnummer === "string" ? body.telefoonnummer.trim() : "",
+    actief: body?.actief,
+  };
+}
+
+function validateLocationFields(location) {
+  if (!location.naam || location.naam.length > 100) {
+    return "Vul een naam in van maximaal 100 tekens.";
+  }
+  if (!location.adres || location.adres.length > 100) {
+    return "Vul een adres in van maximaal 100 tekens.";
+  }
+  if (!/^\d{4}[A-Z]{2}$/.test(location.postcode)) {
+    return "Vul een geldige Nederlandse postcode in, bijvoorbeeld 1234 AB.";
+  }
+  if (!location.plaats || location.plaats.length > 50) {
+    return "Vul een woonplaats in van maximaal 50 tekens.";
+  }
+  if (location.telefoonnummer.length > 12) {
+    return "Het telefoonnummer mag maximaal 12 tekens bevatten.";
+  }
+  if (typeof location.actief !== "boolean") {
+    return "Kies of de locatie actief is.";
+  }
+  return null;
+}
+
 function readConsultantAddress(body) {
   const rawPostcode = typeof body?.postcode === "string" ? body.postcode.trim() : "";
   const address = {
@@ -810,41 +843,79 @@ app.get("/api/consultant/settings/locations", async (request, response, next) =>
   }
 });
 
+app.get("/api/locaties", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) {
+    return response.status(403).json({ error: "Alleen een beheerder kan locaties bekijken." });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT idlocatie AS id,
+             naam,
+             adres,
+             postcode,
+             plaats AS woonplaats,
+             telefoonnummer,
+             COALESCE(actief = B'1', false) AS actief
+      FROM locaties
+      ORDER BY naam, idlocatie
+    `);
+    response.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/locaties/:id", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) {
+    return response.status(403).json({ error: "Alleen een beheerder kan locaties wijzigen." });
+  }
+
+  if (!/^\d+$/.test(request.params.id) || !Number.isSafeInteger(Number(request.params.id)) || Number(request.params.id) < 1) {
+    return response.status(400).json({ error: "Ongeldig locatienummer." });
+  }
+  const location = readLocationFields(request.body);
+  const validationError = validateLocationFields(location);
+  if (validationError) return response.status(400).json({ error: validationError });
+
+  try {
+    const result = await pool.query(`
+      UPDATE locaties
+      SET naam = $1,
+          adres = $2,
+          postcode = $3,
+          plaats = $4,
+          telefoonnummer = NULLIF($5, ''),
+          actief = $6::bit(1)
+      WHERE idlocatie = $7
+      RETURNING idlocatie AS id
+    `, [
+      location.naam,
+      location.adres,
+      location.postcode,
+      location.plaats,
+      location.telefoonnummer,
+      location.actief ? "1" : "0",
+      Number(request.params.id),
+    ]);
+    if (result.rowCount === 0) return response.status(404).json({ error: "De locatie bestaat niet." });
+    response.json({ id: result.rows[0].id, message: "Locatie gewijzigd." });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/locaties", async (request, response, next) => {
   const session = getSession(request);
   if (!session || session.role !== "consultant" || !session.isBeheerder) {
     return response.status(403).json({ error: "Alleen een beheerder kan locaties toevoegen." });
   }
 
-  const naam = typeof request.body?.naam === "string" ? request.body.naam.trim() : "";
-  const adres = typeof request.body?.adres === "string" ? request.body.adres.trim() : "";
-  const postcode = typeof request.body?.postcode === "string"
-    ? normalizePostcode(request.body.postcode)
-    : "";
-  const plaats = typeof request.body?.woonplaats === "string" ? request.body.woonplaats.trim() : "";
-  const telefoonnummer = typeof request.body?.telefoonnummer === "string"
-    ? request.body.telefoonnummer.trim()
-    : "";
-  const actief = request.body?.actief;
-
-  if (!naam || naam.length > 100) {
-    return response.status(400).json({ error: "Vul een naam in van maximaal 100 tekens." });
-  }
-  if (!adres || adres.length > 100) {
-    return response.status(400).json({ error: "Vul een adres in van maximaal 100 tekens." });
-  }
-  if (!/^\d{4}[A-Z]{2}$/.test(postcode)) {
-    return response.status(400).json({ error: "Vul een geldige Nederlandse postcode in, bijvoorbeeld 1234 AB." });
-  }
-  if (!plaats || plaats.length > 50) {
-    return response.status(400).json({ error: "Vul een woonplaats in van maximaal 50 tekens." });
-  }
-  if (telefoonnummer.length > 12) {
-    return response.status(400).json({ error: "Het telefoonnummer mag maximaal 12 tekens bevatten." });
-  }
-  if (typeof actief !== "boolean") {
-    return response.status(400).json({ error: "Kies of de locatie actief is." });
-  }
+  const location = readLocationFields(request.body);
+  const validationError = validateLocationFields(location);
+  if (validationError) return response.status(400).json({ error: validationError });
 
   const database = await pool.connect();
   try {
@@ -857,7 +928,15 @@ app.post("/api/locaties", async (request, response, next) => {
       INSERT INTO locaties (naam, adres, postcode, plaats, telefoonnummer, actief, idlocatie)
       VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6::bit(1), $7)
       RETURNING idlocatie AS id
-    `, [naam, adres, postcode, plaats, telefoonnummer, actief ? "1" : "0", nextLocationId.rows[0].id]);
+    `, [
+      location.naam,
+      location.adres,
+      location.postcode,
+      location.plaats,
+      location.telefoonnummer,
+      location.actief ? "1" : "0",
+      nextLocationId.rows[0].id,
+    ]);
     await database.query("COMMIT");
     response.status(201).json({ id: result.rows[0].id, message: "Locatie opgeslagen." });
   } catch (error) {

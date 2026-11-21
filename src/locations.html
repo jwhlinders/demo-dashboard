@@ -4,15 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f3f5f1">
-  <title>Locatie toevoegen | Cliëntenagenda</title>
+  <title>Beheer locaties | Cliëntenagenda</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="settings-page">
+<body class="settings-page locations-page">
   <header class="site-header">
     <div class="brand" aria-label="Agenda">
       <span class="brand-mark" aria-hidden="true">&#128197;</span>
       <div class="brand-copy">
-        <span>Locatie toevoegen</span>
+        <span id="consultant-name">Agenda</span>
+        <span class="brand-location" id="consultant-location" hidden></span>
       </div>
     </div>
     <div class="header-actions">
@@ -27,12 +28,31 @@
   </header>
 
   <main class="settings-shell">
-    <section class="settings-panel" aria-labelledby="location-title">
+    <section class="settings-panel" aria-labelledby="locations-heading">
       <div class="settings-topbar">
         <div class="settings-heading">
-          <p class="eyebrow">Beheer</p>
-          <h1 id="location-title">Nieuwe locatie</h1>
+          <p class="eyebrow" id="locations-heading">Beheer locaties</p>
         </div>
+      </div>
+
+      <div class="settings-form">
+        <section class="settings-section" aria-label="Bestaande locaties">
+          <div class="settings-stack">
+            <div class="field-row">
+              <label class="field-label" for="location-select">Locatie</label>
+              <div class="location-select-control">
+                <select id="location-select" name="locationId" disabled>
+                  <option value="" selected>Selecteer een locatie</option>
+                </select>
+                <button class="primary-button location-add-button" id="add-location-button" type="button" aria-label="Nieuwe locatie toevoegen" title="Nieuwe locatie toevoegen" disabled>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       <form class="settings-form" id="location-form">
@@ -49,7 +69,7 @@
             <div class="location-postcode-city">
               <label class="field-label" for="location-postcode">Postcode</label>
               <input class="location-postcode-input" id="location-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" title="Vul een Nederlandse postcode in, bijvoorbeeld 1234 AB." autocomplete="postal-code" autocapitalize="characters" required>
-              <label class="field-label" for="location-city">Woonplaats</label>
+              <label class="field-label" for="location-city">Plaats</label>
               <input id="location-city" name="woonplaats" type="text" maxlength="50" autocomplete="address-level2" required>
             </div>
             <div class="field-row">
@@ -67,9 +87,22 @@
         <p id="location-error" class="login-error" role="alert" hidden></p>
         <div class="settings-actions">
           <button class="secondary-button" id="cancel-button" type="button">Annuleren</button>
-          <button class="primary-button" id="save-button" type="submit">Opslaan</button>
+          <button class="primary-button" id="save-button" type="submit" disabled>Opslaan</button>
         </div>
       </form>
+
+      <dialog class="profile-dialog location-confirm-dialog" id="save-before-new-dialog" aria-labelledby="save-before-new-title">
+        <div class="profile-heading">
+          <div>
+            <p class="eyebrow">Niet-opgeslagen wijzigingen</p>
+            <h2 id="save-before-new-title">Wilt u de wijzigingen opslaan voordat u een nieuwe locatie invoert?</h2>
+          </div>
+        </div>
+        <div class="profile-actions">
+          <button class="secondary-button" id="discard-location-changes" type="button">Nee</button>
+          <button class="primary-button" id="save-location-and-add" type="button">Ja</button>
+        </div>
+      </dialog>
     </section>
   </main>
 
@@ -78,44 +111,213 @@
     const errorMessage = document.querySelector("#location-error");
     const statusMessage = document.querySelector("#location-status");
     const saveButton = document.querySelector("#save-button");
+    const locationSelect = document.querySelector("#location-select");
+    const addLocationButton = document.querySelector("#add-location-button");
+    const saveBeforeNewDialog = document.querySelector("#save-before-new-dialog");
+    const locationsById = new Map();
+    let originalLocationValues;
+    let statusTimeout;
+
+    function clearStatus() {
+      window.clearTimeout(statusTimeout);
+      statusTimeout = undefined;
+      statusMessage.hidden = true;
+    }
+
+    function showStatus(message, hideAfterMilliseconds = 0) {
+      window.clearTimeout(statusTimeout);
+      statusMessage.textContent = message;
+      statusMessage.hidden = false;
+      if (hideAfterMilliseconds > 0) {
+        statusTimeout = window.setTimeout(() => {
+          statusMessage.hidden = true;
+          statusTimeout = undefined;
+        }, hideAfterMilliseconds);
+      }
+    }
+
+    async function loadConsultantHeader() {
+      try {
+        const response = await fetch("/api/consultant");
+        const consultant = await response.json();
+        if (!response.ok) throw new Error(consultant.error || "Gebruikersgegevens konden niet worden geladen.");
+
+        document.querySelector("#consultant-name").textContent = consultant.name || "Agenda";
+        const locationLabel = document.querySelector("#consultant-location");
+        locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
+        locationLabel.hidden = !consultant.locationName;
+      } catch (error) {
+        errorMessage.textContent = error.message || "Gebruikersgegevens konden niet worden geladen.";
+        errorMessage.hidden = false;
+      }
+    }
+
+    function setLocationFields(location) {
+      document.querySelector("#location-name").value = location?.naam || "";
+      document.querySelector("#location-address").value = location?.adres || "";
+      document.querySelector("#location-postcode").value = location?.postcode || "";
+      document.querySelector("#location-city").value = location?.woonplaats || "";
+      document.querySelector("#location-phone").value = location?.telefoonnummer || "";
+      document.querySelector("#location-active").checked = location ? location.actief === true : true;
+      originalLocationValues = getLocationValues();
+    }
+
+    function getLocationValues() {
+      return {
+        naam: document.querySelector("#location-name").value,
+        adres: document.querySelector("#location-address").value,
+        postcode: document.querySelector("#location-postcode").value,
+        woonplaats: document.querySelector("#location-city").value,
+        telefoonnummer: document.querySelector("#location-phone").value,
+        actief: document.querySelector("#location-active").checked,
+      };
+    }
+
+    function hasUnsavedChanges() {
+      const currentValues = getLocationValues();
+      return Object.keys(currentValues).some((key) => currentValues[key] !== originalLocationValues[key]);
+    }
+
+    setLocationFields(null);
+
+    function locationOptionText(location) {
+      return location.naam;
+    }
+
+    async function loadLocations() {
+      try {
+        const response = await fetch("/api/locaties");
+        const locations = await response.json();
+        if (!response.ok) throw new Error(locations.error || "Locaties konden niet worden geladen.");
+
+        const placeholder = new Option("Selecteer een locatie", "", true, true);
+        placeholder.disabled = true;
+        locationSelect.replaceChildren(placeholder);
+        for (const location of locations) {
+          const id = String(location.id);
+          locationsById.set(id, location);
+          locationSelect.add(new Option(locationOptionText(location), id));
+        }
+      } catch (error) {
+        errorMessage.textContent = error.message || "Locaties konden niet worden geladen.";
+        errorMessage.hidden = false;
+        const placeholder = new Option("Selecteer een locatie", "", true, true);
+        placeholder.disabled = true;
+        locationSelect.replaceChildren(placeholder);
+      } finally {
+        locationSelect.disabled = false;
+        addLocationButton.disabled = false;
+        saveButton.disabled = false;
+      }
+    }
+
+    locationSelect.addEventListener("change", () => {
+      setLocationFields(locationsById.get(locationSelect.value));
+      errorMessage.hidden = true;
+      clearStatus();
+    });
+
+    function startNewLocation() {
+      locationSelect.value = "";
+      setLocationFields(null);
+      errorMessage.hidden = true;
+      clearStatus();
+      document.querySelector("#location-name").focus();
+    }
+
+    addLocationButton.addEventListener("click", () => {
+      if (hasUnsavedChanges()) {
+        saveBeforeNewDialog.showModal();
+        return;
+      }
+      startNewLocation();
+    });
+
+    document.querySelector("#discard-location-changes").addEventListener("click", () => {
+      saveBeforeNewDialog.close();
+      startNewLocation();
+    });
+
+    document.querySelector("#save-location-and-add").addEventListener("click", async () => {
+      saveBeforeNewDialog.close();
+      const result = await saveLocation();
+      if (!result) return;
+      startNewLocation();
+      showStatus(result.message, 5000);
+    });
+
+    saveBeforeNewDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+    });
 
     document.querySelector("#cancel-button").addEventListener("click", () => {
       window.location.href = "/";
     });
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    async function saveLocation() {
+      if (!form.reportValidity()) return null;
       errorMessage.hidden = true;
-      statusMessage.hidden = true;
+      clearStatus();
       saveButton.disabled = true;
+      locationSelect.disabled = true;
+      addLocationButton.disabled = true;
 
       const formData = new FormData(form);
+      const locationId = locationSelect.value;
+      const location = {
+        naam: formData.get("naam"),
+        adres: formData.get("adres"),
+        postcode: formData.get("postcode"),
+        woonplaats: formData.get("woonplaats"),
+        telefoonnummer: formData.get("telefoonnummer"),
+        actief: formData.get("actief") === "on",
+      };
       try {
-        const response = await fetch("/api/locaties", {
-          method: "POST",
+        const response = await fetch(locationId
+          ? `/api/locaties/${encodeURIComponent(locationId)}`
+          : "/api/locaties", {
+          method: locationId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            naam: formData.get("naam"),
-            adres: formData.get("adres"),
-            postcode: formData.get("postcode"),
-            woonplaats: formData.get("woonplaats"),
-            telefoonnummer: formData.get("telefoonnummer"),
-            actief: formData.get("actief") === "on",
-          }),
+          body: JSON.stringify(location),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Locatie opslaan is mislukt.");
 
-        statusMessage.textContent = result.message;
-        statusMessage.hidden = false;
-        form.reset();
+        showStatus(result.message);
+        const savedLocation = { ...location, id: result.id };
+        locationsById.set(String(result.id), savedLocation);
+        const existingOption = [...locationSelect.options]
+          .find((option) => option.value === String(result.id));
+        if (existingOption) {
+          existingOption.textContent = locationOptionText(savedLocation);
+        } else {
+          locationSelect.add(new Option(locationOptionText(savedLocation), String(result.id)));
+        }
+        if (!locationId) {
+          form.reset();
+          setLocationFields(null);
+        } else {
+          originalLocationValues = getLocationValues();
+        }
+        return result;
       } catch (error) {
         errorMessage.textContent = error.message || "Locatie opslaan is mislukt.";
         errorMessage.hidden = false;
+        return null;
       } finally {
         saveButton.disabled = false;
+        locationSelect.disabled = false;
+        addLocationButton.disabled = false;
       }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await saveLocation();
     });
+
+    loadConsultantHeader();
+    loadLocations();
 
     document.querySelector("#logout-button").addEventListener("click", async () => {
       try {
