@@ -40,6 +40,7 @@ async function loadAppointments() {
     locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
     locationLabel.hidden = !consultant.locationName;
     document.querySelector("#settings-button").hidden = isClientSession;
+    document.querySelector("#manage-locations-button").hidden = isClientSession || consultant.isBeheerder !== true;
     document.querySelector("#manage-consultant-button").hidden = isClientSession || consultant.isBeheerder !== true;
     if (isClientSession) {
       document.querySelector("#profile-button").hidden = false;

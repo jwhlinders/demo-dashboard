@@ -182,6 +182,11 @@ app.get("/beheer-consultant", requireLogin, (request, response) => {
   if (!session || session.role !== "consultant" || !session.isBeheerder) return response.redirect("/");
   response.sendFile(path.join(__dirname, "consultant-settings.html"));
 });
+app.get("/locaties", requireLogin, (request, response) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) return response.redirect("/");
+  response.sendFile(path.join(__dirname, "locations.html"));
+});
 
 app.post("/api/register", async (request, response, next) => {
   const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
@@ -802,6 +807,64 @@ app.get("/api/consultant/settings/locations", async (request, response, next) =>
     response.json(result.rows);
   } catch (error) {
     next(error);
+  }
+});
+
+app.post("/api/locaties", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) {
+    return response.status(403).json({ error: "Alleen een beheerder kan locaties toevoegen." });
+  }
+
+  const naam = typeof request.body?.naam === "string" ? request.body.naam.trim() : "";
+  const adres = typeof request.body?.adres === "string" ? request.body.adres.trim() : "";
+  const postcode = typeof request.body?.postcode === "string"
+    ? normalizePostcode(request.body.postcode)
+    : "";
+  const plaats = typeof request.body?.woonplaats === "string" ? request.body.woonplaats.trim() : "";
+  const telefoonnummer = typeof request.body?.telefoonnummer === "string"
+    ? request.body.telefoonnummer.trim()
+    : "";
+  const actief = request.body?.actief;
+
+  if (!naam || naam.length > 100) {
+    return response.status(400).json({ error: "Vul een naam in van maximaal 100 tekens." });
+  }
+  if (!adres || adres.length > 100) {
+    return response.status(400).json({ error: "Vul een adres in van maximaal 100 tekens." });
+  }
+  if (!/^\d{4}[A-Z]{2}$/.test(postcode)) {
+    return response.status(400).json({ error: "Vul een geldige Nederlandse postcode in, bijvoorbeeld 1234 AB." });
+  }
+  if (!plaats || plaats.length > 50) {
+    return response.status(400).json({ error: "Vul een woonplaats in van maximaal 50 tekens." });
+  }
+  if (telefoonnummer.length > 12) {
+    return response.status(400).json({ error: "Het telefoonnummer mag maximaal 12 tekens bevatten." });
+  }
+  if (typeof actief !== "boolean") {
+    return response.status(400).json({ error: "Kies of de locatie actief is." });
+  }
+
+  const database = await pool.connect();
+  try {
+    await database.query("BEGIN");
+    await database.query("LOCK TABLE locaties IN EXCLUSIVE MODE");
+    const nextLocationId = await database.query(
+      "SELECT COALESCE(MAX(idlocatie), 0) + 1 AS id FROM locaties",
+    );
+    const result = await database.query(`
+      INSERT INTO locaties (naam, adres, postcode, plaats, telefoonnummer, actief, idlocatie)
+      VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6::bit(1), $7)
+      RETURNING idlocatie AS id
+    `, [naam, adres, postcode, plaats, telefoonnummer, actief ? "1" : "0", nextLocationId.rows[0].id]);
+    await database.query("COMMIT");
+    response.status(201).json({ id: result.rows[0].id, message: "Locatie opgeslagen." });
+  } catch (error) {
+    await database.query("ROLLBACK");
+    next(error);
+  } finally {
+    database.release();
   }
 });
 
