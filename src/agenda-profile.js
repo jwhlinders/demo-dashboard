@@ -46,7 +46,8 @@ export function initProfile() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Profiel opslaan is mislukt.");
-      document.querySelector("#consultant-name").textContent = result.name;
+      const username = profile.username ? ` (${profile.username})` : "";
+      document.querySelector("#consultant-name").textContent = `${result.name}${username}`;
       profileDialog.close();
       setStorageStatus("Je profiel is bijgewerkt.");
     } catch (error) {

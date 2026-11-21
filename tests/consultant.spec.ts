@@ -87,8 +87,9 @@ test("TC-01: consultant kan inloggen en de volledige naam en locatie zien", asyn
 
   expect(consultant.name).toBeTruthy();
   expect(consultant.name).not.toBe("Agenda");
+  expect(consultant.username).toBeTruthy();
   expect(consultant.locationName).toBeTruthy();
-  await expect(page.locator("#consultant-name")).toHaveText(consultant.name);
+  await expect(page.locator("#consultant-name")).toHaveText(`${consultant.name} (${consultant.username})`);
   await expect(page.locator("#consultant-location")).toHaveText(`Locatie: ${consultant.locationName}`);
 });
 

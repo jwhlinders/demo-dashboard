@@ -205,12 +205,18 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
   await expect(manageConsultantLink).toHaveAttribute("href", "/beheer-consultant");
   await manageConsultantLink.click();
   await expect(page).toHaveURL(/\/beheer-consultant$/);
-  await expect(page.locator("#settings-title")).toHaveText("Nieuw consultant");
+  await expect(page.locator("#settings-eyebrow")).toHaveText("Beheer consultants");
+  await expect(page.locator("#settings-title")).toBeHidden();
+  const consultantSelect = page.locator("#managed-consultant-select");
+  await expect(consultantSelect).toBeEnabled();
+  const listedConsultants = await consultantSelect.locator("option").allTextContents();
+  expect(listedConsultants.join(" ")).not.toContain(CONFIG.beheerder.username!);
   await expect(page.locator("#setting-username")).toBeVisible();
   await expect(page.getByLabel("Tussenvoegsel")).toBeVisible();
   await expect(page.locator("#setting-first-name")).toHaveAttribute("maxlength", "20");
   await expect(page.locator("#setting-prefix")).toHaveAttribute("maxlength", "20");
   await expect(page.locator("#setting-last-name")).toHaveAttribute("maxlength", "40");
+  await page.locator("#add-managed-consultant").click();
   const invalidNameResponse = await page.request.post(new URL("/api/consultants", page.url()).toString(), {
     data: { voornaam: "V".repeat(21), achternaam: "Bakker" },
   });
@@ -233,8 +239,12 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
   await page.locator('[data-weekday="Ma"]').check();
   await page.locator("#save-button").click();
 
-  await expect(page.locator("#settings-status")).toHaveText("Consultant is aangemaakt. Bewaar de authorisatiecode.");
-  const authorisatiecode = await page.locator("#setting-authorisatiecode").inputValue();
+  const saveStatus = page.locator("#settings-status");
+  await expect(saveStatus).toContainText("Consultant is aangemaakt. Bewaar de authorisatiecode:");
+  const authorizationCodeMatch = (await saveStatus.innerText())
+    .match(/authorisatiecode: ([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8})\./);
+  expect(authorizationCodeMatch).not.toBeNull();
+  const authorisatiecode = authorizationCodeMatch?.[1];
   expect(authorisatiecode).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/);
 
   const storedCode = await database!.query(
@@ -268,19 +278,6 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
     postcode: "1234AB",
     woonplaats: "Amsterdam",
   });
-  await expect(page.locator("#setting-first-name")).not.toBeEditable();
-  await expect(page.locator("#setting-home-street")).not.toBeEditable();
-  await expect(page.locator("#setting-username")).not.toBeEditable();
-  await expect(page.locator("#setting-authorisatiecode")).not.toBeEditable();
-  await expect(page.locator("#setting-default-location")).toBeDisabled();
-  await expect(page.locator('[data-weekday="Ma"]')).toBeDisabled();
-  await expect(page.locator("#cancel-button")).toBeHidden();
-  await expect(page.locator("#save-button")).toBeHidden();
-  await expect(page.locator("#add-another-consultant-button")).toHaveText("Nieuw consultant");
-  await expect(page.locator("#done-adding-consultants-button")).toHaveText("OK");
-
-  await page.locator("#add-another-consultant-button").click();
-  await expect(page.locator("#settings-title")).toHaveText("Nieuw consultant");
   await expect(page.locator("#setting-first-name")).toBeEditable();
   await expect(page.locator("#setting-first-name")).toHaveValue("");
   await expect(page.locator("#setting-username")).toHaveValue("");
@@ -303,8 +300,12 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
   await page.locator("#setting-einde-werkdag").fill("17:00");
   await page.locator('[data-weekday="Ma"]').check();
   await page.locator("#save-button").click();
-  await expect(page.locator("#settings-status")).toHaveText("Consultant is aangemaakt. Bewaar de authorisatiecode.");
-  await expect(page.locator("#setting-first-name")).not.toBeEditable();
+  await expect(saveStatus).toContainText("Consultant is aangemaakt. Bewaar de authorisatiecode:");
+  const secondAuthorizationCodeMatch = (await saveStatus.innerText())
+    .match(/authorisatiecode: ([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8})\./);
+  expect(secondAuthorizationCodeMatch).not.toBeNull();
+  await expect(page.locator("#setting-first-name")).toBeEditable();
+  await expect(page.locator("#setting-first-name")).toHaveValue("");
   const savedLongName = await database!.query(
     "SELECT voornaam, tussenvoegsel, achternaam FROM consultant WHERE username = $1",
     [secondConsultantUsername],
@@ -315,7 +316,7 @@ test("TC-05 Beheerder can add a consultant and receives a stored authorization c
     achternaam: longLastName,
   });
 
-  await page.locator("#done-adding-consultants-button").click();
+  await page.locator("#back-button").click();
   await expect(page).toHaveURL(/\/$/);
 });
 

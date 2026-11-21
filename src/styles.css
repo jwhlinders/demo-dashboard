@@ -529,6 +529,11 @@ body {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.locations-page .settings-topbar,
+.consultant-management-page .settings-topbar {
+  padding: 14px 24px;
+}
+
 .settings-heading {
   display: flex;
   flex-direction: column;
@@ -539,6 +544,10 @@ body {
   display: grid;
   gap: 12px;
   padding: 18px;
+}
+
+.settings-form[hidden] {
+  display: none;
 }
 
 .settings-section {
@@ -595,6 +604,55 @@ body {
   align-items: center;
   gap: 12px;
   max-width: 820px;
+}
+
+.location-postcode-city {
+  display: grid;
+  grid-template-columns: 132px 11ch max-content minmax(0, 1fr);
+  gap: 12px;
+  max-width: 820px;
+}
+
+.location-postcode-input {
+  width: 11ch;
+  max-width: 100%;
+}
+
+.location-select-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-stack .location-select-control select {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+}
+
+.settings-stack .location-add-button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  flex: 0 0 40px;
+  margin-top: 0;
+  padding: 0;
+}
+
+.location-add-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-stack input.location-active-checkbox {
+  width: 15px;
+  min-height: 15px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--green);
 }
 
 #setting-username-row[hidden],
@@ -744,6 +802,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .location-postcode-city {
+    grid-template-columns: 1fr;
+  }
+
   .field-inline-grid,
   .time-inline {
     grid-template-columns: 1fr;
@@ -806,6 +868,14 @@ body {
   margin-bottom: 5px;
 }
 
+#save-before-new-title {
+  margin-bottom: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
 .dialog-close {
   width: 36px;
   height: 36px;
@@ -839,6 +909,20 @@ body {
   min-width: 126px;
   margin: 0;
   padding: 0 14px;
+}
+
+.location-confirm-dialog .profile-actions {
+  justify-content: center;
+}
+
+.location-confirm-dialog .profile-actions .secondary-button,
+.location-confirm-dialog .profile-actions .primary-button {
+  min-width: 64px;
+  min-height: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 .register-confirmation-content {
