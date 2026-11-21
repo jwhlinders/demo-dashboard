@@ -529,7 +529,8 @@ body {
   background: rgba(255, 255, 255, 0.8);
 }
 
-.locations-page .settings-topbar {
+.locations-page .settings-topbar,
+.consultant-management-page .settings-topbar {
   padding: 14px 24px;
 }
 
@@ -543,6 +544,10 @@ body {
   display: grid;
   gap: 12px;
   padding: 18px;
+}
+
+.settings-form[hidden] {
+  display: none;
 }
 
 .settings-section {

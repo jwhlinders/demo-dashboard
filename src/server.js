@@ -78,6 +78,55 @@ function validateConsultantAddress(address, required) {
   return null;
 }
 
+function readManagedConsultantFields(body) {
+  return {
+    firstName: typeof body?.voornaam === "string" ? body.voornaam.trim() : "",
+    prefix: typeof body?.tussenvoegsel === "string" ? body.tussenvoegsel.trim() : "",
+    lastName: typeof body?.achternaam === "string" ? body.achternaam.trim() : "",
+    username: typeof body?.username === "string" ? body.username.trim() : "",
+    email: typeof body?.email === "string" ? body.email.trim().toLowerCase() : "",
+    phone: typeof body?.telefoonnummer === "string" ? body.telefoonnummer.trim() : "",
+    address: readConsultantAddress(body),
+    functie: typeof body?.functie === "string" ? body.functie.trim() : "",
+    startTime: typeof body?.start_werkdag === "string" ? body.start_werkdag : "",
+    endTime: typeof body?.einde_werkdag === "string" ? body.einde_werkdag : "",
+    locationId: Number(body?.defaultlocatie),
+    weekdays: body?.werkdagen,
+  };
+}
+
+function validateManagedConsultantFields(fields, requireUsername, requireAddress) {
+  if (!fields.firstName || fields.firstName.length > 20 || !fields.lastName || fields.lastName.length > 40 || fields.prefix.length > 20) {
+    return "Vul een geldige voornaam (maximaal 20), tussenvoegsel (maximaal 20) en achternaam (maximaal 40 tekens) in.";
+  }
+  if (requireUsername && !/^[a-zA-Z0-9._-]{1,80}$/.test(fields.username)) {
+    return "Vul een geldige gebruikersnaam in (maximaal 80 tekens; letters, cijfers, punt, streepje en underscore).";
+  }
+  if (fields.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) {
+    return "Vul een geldig e-mailadres in.";
+  }
+  if (fields.phone.length > 30 || (fields.phone && !/^[+0-9().\-\s]{6,30}$/.test(fields.phone))) {
+    return "Vul een geldig telefoonnummer van maximaal 30 tekens in.";
+  }
+  const addressError = validateConsultantAddress(fields.address, requireAddress);
+  if (addressError) return addressError;
+  if (!fields.functie || fields.functie.length > 80) {
+    return "Vul een functie van maximaal 80 tekens in.";
+  }
+  const isValidTime = (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time);
+  if (!isValidTime(fields.startTime) || !isValidTime(fields.endTime) || fields.startTime >= fields.endTime) {
+    return "Vul geldige werktijden in waarbij de eindtijd na de starttijd ligt.";
+  }
+  if (!Number.isSafeInteger(fields.locationId) || fields.locationId < 1) {
+    return "Kies een geldige werklocatie.";
+  }
+  const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
+  if (!Array.isArray(fields.weekdays) || fields.weekdays.some((weekday) => !validWeekdays.includes(weekday))) {
+    return "Kies geldige werkdagen.";
+  }
+  return null;
+}
+
 async function insertAddress(database, address) {
   const result = await database.query(`
     INSERT INTO adres (straat, postcode, woonplaats)
@@ -851,6 +900,39 @@ app.get("/api/consultant/settings/locations", async (request, response, next) =>
   }
 });
 
+app.get("/api/consultants", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) {
+    return response.status(403).json({ error: "Alleen een beheerder kan consultants bekijken." });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT consultant.username,
+             consultant.voornaam,
+             consultant.tussenvoegsel,
+             consultant.achternaam,
+             consultant.email,
+             consultant.functie,
+             consultant.telefoonnummer,
+             consultant.defaultlocatie,
+             consultant.werkdagen,
+             consultant.start_werkdag,
+             consultant.einde_werkdag,
+             consultant_adres.straat AS address_street,
+             consultant_adres.postcode AS address_postcode,
+             consultant_adres.woonplaats AS address_city
+      FROM consultant
+      LEFT JOIN adres AS consultant_adres ON consultant_adres.idadres = consultant.idadres
+      WHERE COALESCE(LOWER(BTRIM(consultant.functie)), '') <> 'beheerder'
+      ORDER BY consultant.achternaam, consultant.voornaam, consultant.username
+    `);
+    response.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/locaties", async (request, response, next) => {
   const session = getSession(request);
   if (!session || session.role !== "consultant" || !session.isBeheerder) {
@@ -961,47 +1043,15 @@ app.post("/api/consultants", async (request, response, next) => {
     return response.status(403).json({ error: "Alleen een beheerder kan consultants toevoegen." });
   }
 
-  const firstName = typeof request.body?.voornaam === "string" ? request.body.voornaam.trim() : "";
-  const prefix = typeof request.body?.tussenvoegsel === "string" ? request.body.tussenvoegsel.trim() : "";
-  const lastName = typeof request.body?.achternaam === "string" ? request.body.achternaam.trim() : "";
-  const username = typeof request.body?.username === "string" ? request.body.username.trim() : "";
-  const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
-  const phone = typeof request.body?.telefoonnummer === "string" ? request.body.telefoonnummer.trim() : "";
-  const consultantAddress = readConsultantAddress(request.body);
-  const functie = typeof request.body?.functie === "string" ? request.body.functie.trim() : "";
-  const startTime = typeof request.body?.start_werkdag === "string" ? request.body.start_werkdag : "";
-  const endTime = typeof request.body?.einde_werkdag === "string" ? request.body.einde_werkdag : "";
-  const locationId = Number(request.body?.defaultlocatie);
-  const weekdays = request.body?.werkdagen;
+  const fields = readManagedConsultantFields(request.body);
+  const validationError = validateManagedConsultantFields(fields, true, true);
+  if (validationError) return response.status(400).json({ error: validationError });
+  const {
+    firstName, prefix, lastName, username, email, phone,
+    address: consultantAddress, functie, startTime, endTime,
+    locationId, weekdays,
+  } = fields;
   const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
-  const isValidTime = (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time);
-
-  if (!firstName || firstName.length > 20 || !lastName || lastName.length > 40 || prefix.length > 20) {
-    return response.status(400).json({ error: "Vul een geldige voornaam (maximaal 20), tussenvoegsel (maximaal 20) en achternaam (maximaal 40 tekens) in." });
-  }
-  if (!/^[a-zA-Z0-9._-]{1,80}$/.test(username)) {
-    return response.status(400).json({ error: "Vul een geldige gebruikersnaam in (maximaal 80 tekens; letters, cijfers, punt, streepje en underscore)." });
-  }
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return response.status(400).json({ error: "Vul een geldig e-mailadres in." });
-  }
-  if (phone.length > 30 || (phone && !/^[+0-9().\-\s]{6,30}$/.test(phone))) {
-    return response.status(400).json({ error: "Vul een geldig telefoonnummer van maximaal 30 tekens in." });
-  }
-  const addressError = validateConsultantAddress(consultantAddress, true);
-  if (addressError) return response.status(400).json({ error: addressError });
-  if (!functie || functie.length > 80) {
-    return response.status(400).json({ error: "Vul een functie van maximaal 80 tekens in." });
-  }
-  if (!isValidTime(startTime) || !isValidTime(endTime) || startTime >= endTime) {
-    return response.status(400).json({ error: "Vul geldige werktijden in waarbij de eindtijd na de starttijd ligt." });
-  }
-  if (!Number.isSafeInteger(locationId) || locationId < 1) {
-    return response.status(400).json({ error: "Kies een geldige werklocatie." });
-  }
-  if (!Array.isArray(weekdays) || weekdays.some((weekday) => !validWeekdays.includes(weekday))) {
-    return response.status(400).json({ error: "Kies geldige werkdagen." });
-  }
 
   const werkdagenValue = validWeekdays.filter((weekday) => weekdays.includes(weekday)).join("");
   const database = await pool.connect();
@@ -1082,6 +1132,110 @@ app.post("/api/consultants", async (request, response, next) => {
   } catch (error) {
     await database.query("ROLLBACK");
     if (error.code === "23505") return response.status(409).json({ error: "De gebruikersnaam, het e-mailadres of de authorisatiecode is al in gebruik." });
+    next(error);
+  } finally {
+    database.release();
+  }
+});
+
+app.patch("/api/consultants/:username", async (request, response, next) => {
+  const session = getSession(request);
+  if (!session || session.role !== "consultant" || !session.isBeheerder) {
+    return response.status(403).json({ error: "Alleen een beheerder kan consultants wijzigen." });
+  }
+
+  const username = request.params.username;
+  if (!/^[a-zA-Z0-9._-]{1,80}$/.test(username)) {
+    return response.status(400).json({ error: "Ongeldige gebruikersnaam." });
+  }
+  const fields = readManagedConsultantFields(request.body);
+  const validationError = validateManagedConsultantFields(fields, false, false);
+  if (validationError) return response.status(400).json({ error: validationError });
+
+  const {
+    firstName, prefix, lastName, email, phone, address,
+    functie, startTime, endTime, locationId, weekdays,
+  } = fields;
+  const validWeekdays = ["Ma", "Di", "Wo", "Do", "Vr"];
+  const werkdagenValue = validWeekdays.filter((weekday) => weekdays.includes(weekday)).join("");
+  const database = await pool.connect();
+  try {
+    await database.query("BEGIN");
+    await database.query("SELECT pg_advisory_xact_lock(741852963)");
+    const target = await database.query(
+      "SELECT username FROM consultant WHERE username = $1 FOR UPDATE",
+      [username],
+    );
+    if (target.rowCount === 0) {
+      await database.query("ROLLBACK");
+      return response.status(404).json({ error: "Consultant niet gevonden." });
+    }
+
+    const duplicateEmail = await database.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM consultant
+        WHERE LOWER(email) = LOWER($1) AND LOWER(username) <> LOWER($2)
+        UNION ALL
+        SELECT 1 FROM klanten WHERE LOWER(email) = LOWER($1)
+      ) AS exists
+    `, [email, username]);
+    if (duplicateEmail.rows[0].exists) {
+      await database.query("ROLLBACK");
+      return response.status(409).json({ error: "Er bestaat al een account met dit e-mailadres." });
+    }
+
+    const location = await database.query(
+      "SELECT idlocatie FROM locaties WHERE idlocatie = $1 FOR KEY SHARE",
+      [locationId],
+    );
+    if (location.rowCount === 0) {
+      await database.query("ROLLBACK");
+      return response.status(400).json({ error: "De gekozen werklocatie bestaat niet." });
+    }
+
+    let addressId;
+    if (address.provided) {
+      addressId = await saveConsultantAddress(database, username, address);
+      if (addressId === null) {
+        await database.query("ROLLBACK");
+        return response.status(404).json({ error: "Consultant niet gevonden." });
+      }
+    }
+
+    const updates = [
+      firstName, prefix, lastName, email, phone, functie,
+      startTime, endTime, locationId, werkdagenValue, username,
+    ];
+    let addressUpdate = "";
+    if (addressId !== undefined) {
+      updates.push(addressId);
+      addressUpdate = `, idadres = $${updates.length}`;
+    }
+    const result = await database.query(`
+      UPDATE consultant
+      SET voornaam = $1, tussenvoegsel = NULLIF($2, ''), achternaam = $3,
+          email = $4, telefoonnummer = NULLIF($5, ''), functie = $6,
+          start_werkdag = $7, einde_werkdag = $8, defaultlocatie = $9, werkdagen = $10
+          ${addressUpdate}
+      WHERE username = $11
+      RETURNING voornaam, tussenvoegsel, achternaam, functie
+    `, updates);
+    if (result.rowCount === 0) {
+      await database.query("ROLLBACK");
+      return response.status(404).json({ error: "Consultant niet gevonden." });
+    }
+
+    await database.query("COMMIT");
+    if (username.toLocaleLowerCase("nl-NL") === session.username.toLocaleLowerCase("nl-NL")) {
+      session.name = [result.rows[0].voornaam, result.rows[0].tussenvoegsel, result.rows[0].achternaam]
+        .filter(Boolean)
+        .join(" ");
+      session.isBeheerder = result.rows[0].functie.trim().toLocaleLowerCase("nl-NL") === "beheerder";
+    }
+    response.json({ username, message: "Consultantgegevens zijn opgeslagen." });
+  } catch (error) {
+    await database.query("ROLLBACK");
+    if (error.code === "23505") return response.status(409).json({ error: "Er bestaat al een account met dit e-mailadres." });
     next(error);
   } finally {
     database.release();
