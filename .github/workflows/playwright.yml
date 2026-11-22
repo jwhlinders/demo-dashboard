@@ -59,6 +59,9 @@ jobs:
       - name: Initialize test database
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/fixtures/ci-schema.sql
 
+      - name: Generate BDD tests
+        run: npx bddgen
+
       - name: Run Playwright tests
         run: npx playwright test --workers=1
 
