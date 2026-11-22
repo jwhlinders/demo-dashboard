@@ -20,7 +20,8 @@ test("client can update email and address in their profile", async ({ page }) =>
   try {
     const profileResponse = await page.request.get(profileUrl);
     expect(profileResponse.ok()).toBeTruthy();
-    originalProfile = await profileResponse.json();
+    const profile = await profileResponse.json() as Record<string, string>;
+    originalProfile = profile;
 
     await page.getByRole("button", { name: "Menu openen" }).click();
     const menu = page.getByRole("navigation", { name: "Accountmenu" });
@@ -29,10 +30,10 @@ test("client can update email and address in their profile", async ({ page }) =>
     await expect(menu.locator("#manage-consultant-button")).toBeHidden();
     await expect(menu.getByRole("button", { name: "Uitloggen" })).toBeVisible();
     await menu.locator("#profile-button").click();
-    await expect(page.locator("#profile-email")).toHaveValue(originalProfile.email);
-    await expect(page.locator("#profile-street")).toHaveValue(originalProfile.straat);
-    await expect(page.locator("#profile-postcode")).toHaveValue(originalProfile.postcode);
-    await expect(page.locator("#profile-city")).toHaveValue(originalProfile.woonplaats);
+    await expect(page.locator("#profile-email")).toHaveValue(profile.email);
+    await expect(page.locator("#profile-street")).toHaveValue(profile.straat);
+    await expect(page.locator("#profile-postcode")).toHaveValue(profile.postcode);
+    await expect(page.locator("#profile-city")).toHaveValue(profile.woonplaats);
 
     const updatedEmail = `profile-${Date.now()}@example.invalid`;
     const updatedStreet = `Profieltest ${Date.now()} 1`;

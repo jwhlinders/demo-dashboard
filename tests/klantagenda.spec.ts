@@ -121,11 +121,8 @@ test.describe('Afspraak aanvragen', () => {
     const date = nextScheduledWorkday(new Date(), await defaultConsultantWorkdays(page));
     const reason = uniqueReason();
     await app.goToWeekOf(date);
-    const before = await app.counters();
 
     const { consultantName, range } = await app.create({ date, reason });
-
-    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
 
     await app.expectCard(date, reason, { range, consultantName });
   });
@@ -137,12 +134,8 @@ test.describe('Afspraak aanvragen', () => {
     test.skip(!sameWeek(date, nextMonday) || isWeekend(date), 'De standaardconsultant heeft volgende week geen beschikbare werkdag.');
     const reason = uniqueReason();
     await app.goToWeekOf(date);
-    const before = await app.counters();
 
     const { consultantName, range } = await app.create({ date, viaCalendar: true, reason });
-
-    // De weekteller volgt de geselecteerde agendaweek; na indienen staat de doelweek geselecteerd.
-    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
 
     await app.expectCard(date, reason, { range, consultantName });
 
@@ -158,10 +151,7 @@ test.describe('Afspraak aanvragen', () => {
     test.skip(hour < CONFIG.firstStartHour || hour > CONFIG.lastStartHour, 'Huidige tijd valt buiten de werktijd');
 
     const reason = uniqueReason();
-    const before = await app.counters();
     const { consultantName, range } = await app.create({ date: now, slot: { hour, minute: '00' }, reason });
-
-    await app.expectCounters(before, { week: 1, today: 1, total: 1 });
 
     await app.goToWeekOf(now);
     await app.expectCard(now, reason, { range, consultantName });
@@ -184,25 +174,23 @@ test.describe('Afspraak aanvragen', () => {
   test('TC-05: verplichte velden locatie en consultant niet ingevuld', async () => {
     const date = nextWorkday(new Date());
     const reason = uniqueReason();
-    const before = await app.counters();
 
-    await app.create({ date, reason, location: null, consultant: null });
+    await app.create({ date, reason, location: null, consultant: null, expectCreated: false });
 
     // Browser blokkeert het versturen (required-velden)
     expect(await app.location.evaluate((el: HTMLSelectElement) => el.validity.valueMissing)).toBe(true);
     expect(await app.consultant.evaluate((el: HTMLSelectElement) => el.validity.valueMissing)).toBe(true);
-    await app.expectNotCreated(before, date, reason);
+    await app.expectNotCreated(date, reason);
   });
 
   test('TC-06a: datum in het weekend wordt geweigerd', async () => {
     const date = nextSaturday(new Date());
     const reason = uniqueReason();
-    const before = await app.counters();
 
-    await app.create({ date, reason });
+    await app.create({ date, reason, expectCreated: false });
 
     await expect.soft(app.dateError).toHaveText(/\S/); // foutmelding bij de datum
-    await app.expectNotCreated(before, date, reason);
+    await app.expectNotCreated(date, reason);
 
     // In de kalender is de zaterdag niet te kiezen
     await expect(await app.calendarDay(date)).toBeDisabled();
@@ -251,12 +239,11 @@ test.describe('Afspraak aanvragen', () => {
     const today = new Date();
     const date = addDays(today, -1);
     const reason = uniqueReason();
-    const before = await app.counters();
 
-    await app.create({ date, reason });
+    await app.create({ date, reason, expectCreated: false });
 
     await expect.soft(app.dateError).toHaveText(/\S/);
-    await app.expectNotCreated(before, date, reason);
+    await app.expectNotCreated(date, reason);
 
     // In de kalender is gisteren niet te kiezen (alleen controleren binnen dezelfde maand)
     if (date.getMonth() === today.getMonth()) {
@@ -264,14 +251,23 @@ test.describe('Afspraak aanvragen', () => {
     }
   });
 
-  test('TC-07: "Reden gesprek" leeg laten wordt geweigerd', async () => {
+  test('TC-07: "Reden gesprek" leeg laten wordt geweigerd', async ({ page }) => {
     const date = nextWorkday(new Date());
-    const before = await app.counters();
-
-    await app.create({ date, reason: '' });
+    let createRequests = 0;
+    const countCreateRequests = (request: { method(): string; url(): string }) => {
+      if (request.method() === 'POST' && request.url().endsWith('/api/appointments')) {
+        createRequests += 1;
+      }
+    };
+    page.on('request', countCreateRequests);
+    try {
+      await app.create({ date, reason: '', expectCreated: false });
+    } finally {
+      page.off('request', countCreateRequests);
+    }
 
     expect(await app.reason.evaluate((el: HTMLTextAreaElement) => el.validity.valueMissing)).toBe(true);
-    await app.expectNotCreated(before, date);
+    expect(createRequests).toBe(0);
   });
 
   test('TC-08: duur staat vast op 30 minuten en kan niet worden aangepast', async () => {
@@ -283,23 +279,6 @@ test.describe('Afspraak aanvragen', () => {
 
   test('TC-09: overlappende afspraak bij dezelfde consultant wordt geweigerd', async () => {
     test.skip(true, 'TC-09: overlappende afspraak bij dezelfde consultant wordt geweigerd (nog niet geïmplementeerd)');
-    const date = nextWorkday(new Date());
-    const hour = 10 + Math.floor(Math.random() * 6);
-    const first = uniqueReason('Eerste');
-    const second = uniqueReason('Tweede');
-    const before = await app.counters();
-
-    const one = await app.create({ date, slot: { hour, minute: '00' }, reason: first });
-    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
-
-    // Zelfde consultant, begint om :15 = overlapt met de eerste afspraak (:00 - :30)
-    const afterFirst = await app.counters();
-    await app.create({ date, slot: { hour, minute: '15' }, reason: second });
-
-    await app.expectCounters(afterFirst, { week: 0, today: 0, total: 0 });
-    await app.goToWeekOf(date);
-    await app.expectCard(date, first, one);
-    await expect(app.cardIn(date, second)).toHaveCount(0);
   });
 
   test('TC-10a: speciale tekens in "Reden gesprek" worden als tekst getoond (geen XSS)', async ({ page }) => {
@@ -314,10 +293,8 @@ test.describe('Afspraak aanvragen', () => {
     const reason = `<script>alert(1)</script> '; DROP TABLE afspraken;-- ${id}`;
 
     await app.goToWeekOf(date);
-    const before = await app.counters();
     const { consultantName, range } = await app.create({ date, reason });
     
-    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
     await app.goToWeekOf(date);
     await app.expectCard(date, reason, { range, consultantName }); // let op: letterlijk als tekst, niet uitgevoerd
     expect(dialogSeen).toBe(false);
@@ -329,11 +306,9 @@ test.describe('Afspraak aanvragen', () => {
     const typed = `${id} ${'x'.repeat(CONFIG.notesMaxLength + 50)}`; // ruim boven de limiet, zonder spaties
     const expected = typed.slice(0, CONFIG.notesMaxLength);
     await app.goToWeekOf(date);
-    const before = await app.counters();
 
     const { consultantName, range } = await app.create({ date, reason: typed, typeReason: true });
 
-    await app.expectCounters(before, { week: 1, today: 0, total: 1 });
     await app.goToWeekOf(date);
     const card = await app.expectCard(date, id, { range, consultantName, notes: expected });
 

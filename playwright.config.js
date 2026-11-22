@@ -1,14 +1,31 @@
 import fs from "node:fs";
 import { defineConfig } from "@playwright/test";
+import { defineBddConfig } from "playwright-bdd"
 
 if (fs.existsSync(".env")) process.loadEnvFile(".env");
 
 const port = process.env.PLAYWRIGHT_PORT || "3100";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`;
 
+const bddConfig = defineBddConfig({
+  features: "./features/**/*.feature",
+  steps: "./tests/step-definitions/**/*.steps.{js,ts}",
+  outputDir: "./tests/step-definitions/generated",
+});
+
 export default defineConfig({
   testDir: "./tests",
-  
+  projects: [
+    {
+      name: "playwright",
+      testDir: "./tests",
+      testIgnore: "**/step-definitions/generated/**",
+    },
+    {
+      name: "bdd",
+      testDir: bddConfig,
+    },
+  ],
   reporter: [
     ["line"], 
     ["allure-playwright", { resultsDir: "allure-results" }]

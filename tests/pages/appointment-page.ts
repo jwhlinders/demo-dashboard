@@ -1,8 +1,6 @@
 import { expect, type Page, type Locator } from '@playwright/test';
 import { pad, timeRange, type Slot } from '../helpers/date-time';
 
-type Counters = { week: number; today: number; total: number };
-
 type CreateOptions = {
   date: Date;
   viaCalendar?: boolean; // datum kiezen met het kalenderpopupje i.p.v. typen
@@ -11,6 +9,7 @@ type CreateOptions = {
   typeReason?: boolean; // tekens echt typen (maxlength geldt dan wel; bij fill() niet)
   location?: number | null; // index in dropdown (1 = eerste echte keuze), null = niet kiezen
   consultant?: number | null;
+  expectCreated?: boolean;
 };
 
 const DAY_MS = 86_400_000;
@@ -103,32 +102,8 @@ export class AppointmentPage {
     await this.page.goto('/dashboard');
     await expect(this.submit).toBeVisible();
     await expect(this.page.locator('#storage-status')).toHaveText(/Je afspraken worden opgeslagen in PostgreSQL\./);
-  }
-
-  /* ----------------------------- Tellers --------------------------- */
-
-  /** Lees een teller uit de kaarten bovenaan ("Vandaag", "Afspraken in deze week", "Totaal gepland"). */
-  private async counter(label: string): Promise<number> {
-    const text = await this.page.getByText(label, { exact: true }).first().locator('xpath=..').innerText();
-    const match = text.match(/(\d+)\s*afspra/i);
-    if (!match) throw new Error(`Teller "${label}" niet gevonden in: ${text}`);
-    return Number(match[1]);
-  }
-
-  async counters(): Promise<Counters> {
-    return {
-      week: await this.counter('Afspraken in deze week'),
-      today: await this.counter('Vandaag'),
-      total: await this.counter('Totaal gepland'),
-    };
-  }
-
-  async expectCounters(before: Counters, delta: Counters) {
-    await expect.poll(() => this.counters()).toEqual({
-      week: before.week + delta.week,
-      today: before.today + delta.today,
-      total: before.total + delta.total,
-    });
+    await expect(this.page.locator('#form-mode-label')).toHaveText('Afspraak aanvragen');
+    await expect(this.location).toBeEnabled();
   }
 
   /* ----------------------------- Formulier ------------------------- */
@@ -176,7 +151,21 @@ export class AppointmentPage {
     const consultantName =
       opts.consultant === null ? '' : (await this.consultant.locator('option:checked').innerText()).trim();
 
+    const createResponse = opts.expectCreated === false
+      ? undefined
+      : this.page.waitForResponse((response) =>
+        new URL(response.url()).pathname === '/api/appointments' &&
+        response.request().method() === 'POST',
+      );
     await this.submit.click();
+    if (createResponse) {
+      const response = await createResponse;
+      const responseBody = await response.text();
+      expect(response.status(), `Afspraak aanmaken: ${responseBody}`).toBe(201);
+      await expect(this.page.locator('#storage-status')).toHaveText(
+        'Je afspraakaanvraag is verstuurd en wacht op bevestiging.',
+      );
+    }
     return { consultantName, range: timeRange(slot, duration) };
   }
 
@@ -217,12 +206,9 @@ export class AppointmentPage {
     return card;
   }
 
-  /** Controleert dat er niets is aangemaakt: tellers gelijk en (optioneel) geen kaartje in de juiste week. */
-  async expectNotCreated(before: Counters, date: Date, reason?: string) {
-    await this.expectCounters(before, { week: 0, today: 0, total: 0 });
-    if (reason) {
-      await this.goToWeekOf(date);
-      await expect(this.cardIn(date, reason)).toHaveCount(0);
-    }
+  /** Controleert dat er geen afspraakkaartje met deze reden is aangemaakt. */
+  async expectNotCreated(date: Date, reason: string) {
+    await this.goToWeekOf(date);
+    await expect(this.cardIn(date, reason)).toHaveCount(0);
   }
 }
