@@ -140,15 +140,12 @@ Then("blijf ik uitgelogd", async ({ page }) => {
   await getScenario(page).login.expectNotLoggedIn();
 });
 
-Given(
-  "ik heb de foutmelding gezien na een poging met een bestaande gebruikersnaam en verkeerd wachtwoord",
-  async ({ page }) => {
-    const { login } = getScenario(page);
-    await login.login(clientUser.username, "FoutWachtwoord!1");
-    await expect(login.error).toBeVisible();
-    getScenario(page).knownUserMessage = (await login.error.innerText()).trim();
-  },
-);
+Given("ik heb de foutmelding gezien na een poging met een bestaande gebruikersnaam en verkeerd wachtwoord", async ({ page }) => {
+  const { login } = getScenario(page);
+  await login.login(clientUser.username, "FoutWachtwoord!1");
+  await expect(login.error).toBeVisible();
+  getScenario(page).knownUserMessage = (await login.error.innerText()).trim();
+});
 
 When("ik daarna met een onbekende gebruikersnaam probeer in te loggen", async ({ page }) => {
   const { login } = getScenario(page);
