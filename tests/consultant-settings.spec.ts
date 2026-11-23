@@ -376,3 +376,53 @@ test("TC-06 Consultant can update and save address details", async ({ page }) =>
     }
   }
 });
+
+test("TC-07 Beheerder sees the same unsaved-changes dialog in consultant and location management", async ({ page }) => {
+  await login(page, CONFIG.beheerder);
+  await page.goto("/beheer-consultant");
+
+  const consultantSelect = page.locator("#managed-consultant-select");
+  await expect(consultantSelect).toBeEnabled();
+  test.skip(
+    await consultantSelect.locator("option").count() < 2,
+    "Er is een consultant nodig om de wijzigingen-dialoog te openen.",
+  );
+  await consultantSelect.selectOption({ index: 1 });
+  const firstName = page.locator("#setting-first-name");
+  await firstName.fill((await firstName.inputValue()) === "Dialoog test" ? "Andere test" : "Dialoog test");
+  await page.locator("#add-managed-consultant").click();
+
+  const consultantDialog = page.locator(".confirmation-dialog");
+  await expect(consultantDialog).toBeVisible();
+  await expect(consultantDialog.locator("h2")).toHaveText(
+    "Wilt u de wijzigingen opslaan voordat u een nieuwe consultant invoert?",
+  );
+  const consultantLayout = await consultantDialog.evaluate((dialog) =>
+    [...dialog.children].map((child) => child.className),
+  );
+  await consultantDialog.getByRole("button", { name: "Nee" }).click();
+
+  await page.goto("/locaties");
+  const locationSelect = page.locator("#location-select");
+  await expect(locationSelect).toBeEnabled();
+  test.skip(
+    await locationSelect.locator("option").count() < 2,
+    "Er is een locatie nodig om de wijzigingen-dialoog te openen.",
+  );
+  await locationSelect.selectOption({ index: 1 });
+  const locationName = page.locator("#location-name");
+  await locationName.fill((await locationName.inputValue()) === "Dialoog test" ? "Andere test" : "Dialoog test");
+  await page.locator("#add-location-button").click();
+
+  const locationDialog = page.locator(".confirmation-dialog");
+  await expect(locationDialog).toBeVisible();
+  await expect(locationDialog.locator("h2")).toHaveText(
+    "Wilt u de wijzigingen opslaan voordat u een nieuwe locatie invoert?",
+  );
+  const locationLayout = await locationDialog.evaluate((dialog) =>
+    [...dialog.children].map((child) => child.className),
+  );
+  expect(locationLayout).toEqual(consultantLayout);
+  await locationDialog.getByRole("button", { name: "Nee" }).click();
+  await expect(locationDialog).toBeHidden();
+});

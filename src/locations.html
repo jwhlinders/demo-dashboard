@@ -92,21 +92,10 @@
         </div>
       </form>
 
-      <dialog class="profile-dialog location-confirm-dialog" id="save-before-new-dialog" aria-labelledby="save-before-new-title">
-        <div class="profile-heading">
-          <div>
-            <p class="eyebrow">Niet-opgeslagen wijzigingen</p>
-            <h2 id="save-before-new-title">Wilt u de wijzigingen opslaan voordat u een nieuwe locatie invoert?</h2>
-          </div>
-        </div>
-        <div class="profile-actions">
-          <button class="secondary-button" id="discard-location-changes" type="button">Nee</button>
-          <button class="primary-button" id="save-location-and-add" type="button">Ja</button>
-        </div>
-      </dialog>
     </section>
   </main>
 
+  <script src="/confirmation-dialog.js"></script>
   <script>
     const form = document.querySelector("#location-form");
     const errorMessage = document.querySelector("#location-error");
@@ -114,7 +103,16 @@
     const saveButton = document.querySelector("#save-button");
     const locationSelect = document.querySelector("#location-select");
     const addLocationButton = document.querySelector("#add-location-button");
-    const saveBeforeNewDialog = document.querySelector("#save-before-new-dialog");
+    const saveBeforeNewDialog = window.ConfirmationDialog.create({
+      title: "Wilt u de wijzigingen opslaan voordat u een nieuwe locatie invoert?",
+      onDiscard: startNewLocation,
+      onConfirm: async () => {
+        const result = await saveLocation();
+        if (!result) return;
+        startNewLocation();
+        showStatus(result.message, 5000);
+      },
+    });
     const locationsById = new Map();
     let originalLocationValues;
     let statusTimeout;
@@ -233,23 +231,6 @@
         return;
       }
       startNewLocation();
-    });
-
-    document.querySelector("#discard-location-changes").addEventListener("click", () => {
-      saveBeforeNewDialog.close();
-      startNewLocation();
-    });
-
-    document.querySelector("#save-location-and-add").addEventListener("click", async () => {
-      saveBeforeNewDialog.close();
-      const result = await saveLocation();
-      if (!result) return;
-      startNewLocation();
-      showStatus(result.message, 5000);
-    });
-
-    saveBeforeNewDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
     });
 
     document.querySelector("#cancel-button").addEventListener("click", () => {
