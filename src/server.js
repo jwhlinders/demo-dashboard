@@ -1703,6 +1703,7 @@ app.use("/api", (request, response) => response.status(404).json({ error: "API-r
 app.get("/dashboard", (request, response) => response.sendFile(path.join(__dirname, "index.html")));
 app.get("/", (request, response) => response.sendFile(path.join(__dirname, "index.html")));
 app.get("/styles.css", (request, response) => response.sendFile(path.join(__dirname, "styles.css")));
+app.get("/confirmation-dialog.js", (request, response) => response.sendFile(path.join(__dirname, "confirmation-dialog.js")));
 app.get("/agenda-controller.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-controller.js")));
 app.get("/agenda-calendar.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-calendar.js")));
 app.get("/agenda-date.js", (request, response) => response.sendFile(path.join(__dirname, "agenda-date.js")));

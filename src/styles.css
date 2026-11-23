@@ -868,7 +868,7 @@ body {
   margin-bottom: 5px;
 }
 
-#save-before-new-title {
+.confirmation-dialog-title {
   margin-bottom: 0;
   font-family: inherit;
   font-size: 11px;
@@ -911,12 +911,12 @@ body {
   padding: 0 14px;
 }
 
-.location-confirm-dialog .profile-actions {
+.confirmation-dialog .profile-actions {
   justify-content: center;
 }
 
-.location-confirm-dialog .profile-actions .secondary-button,
-.location-confirm-dialog .profile-actions .primary-button {
+.confirmation-dialog .profile-actions .secondary-button,
+.confirmation-dialog .profile-actions .primary-button {
   min-width: 64px;
   min-height: 24px;
   height: 24px;

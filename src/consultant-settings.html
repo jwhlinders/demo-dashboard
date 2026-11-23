@@ -196,19 +196,6 @@
         </div>
       </form>
 
-      <dialog class="profile-dialog location-confirm-dialog" id="consultant-save-before-new" aria-labelledby="consultant-save-before-new-title">
-        <div class="profile-heading">
-          <div>
-            <p class="eyebrow">Niet-opgeslagen wijzigingen</p>
-            <h2 id="consultant-save-before-new-title">Wilt u de wijzigingen opslaan voordat u een nieuwe consultant invoert?</h2>
-          </div>
-        </div>
-        <div class="profile-actions">
-          <button class="secondary-button" id="discard-managed-consultant" type="button">Nee</button>
-          <button class="primary-button" id="save-managed-consultant-and-add" type="button">Ja</button>
-        </div>
-      </dialog>
-
       <section class="settings-form" aria-labelledby="password-reset-requests-title">
         <section class="settings-section" aria-labelledby="password-reset-requests-title">
           <h3 id="password-reset-requests-title">Wachtwoordaanvragen</h3>
@@ -221,6 +208,7 @@
     </section>
   </main>
 
+  <script src="/confirmation-dialog.js"></script>
   <script>
     const settingsError = document.querySelector("#settings-error");
     let locationsById = new Map();
@@ -232,7 +220,16 @@
     const managedConsultantPicker = document.querySelector("#managed-consultant-picker");
     const managedConsultantSelect = document.querySelector("#managed-consultant-select");
     const addManagedConsultantButton = document.querySelector("#add-managed-consultant");
-    const consultantSaveBeforeNewDialog = document.querySelector("#consultant-save-before-new");
+    const consultantSaveBeforeNewDialog = window.ConfirmationDialog.create({
+      title: "Wilt u de wijzigingen opslaan voordat u een nieuwe consultant invoert?",
+      onDiscard: startNewManagedConsultant,
+      onConfirm: async () => {
+        const saved = await saveManagedConsultant();
+        if (!saved) return;
+        startNewManagedConsultant();
+        showManagedConsultantSaveStatus(saved);
+      },
+    });
     const managedConsultantsByUsername = new Map();
     let managedFormBaseline = "";
 
@@ -522,23 +519,6 @@
         return;
       }
       startNewManagedConsultant();
-    });
-
-    document.querySelector("#discard-managed-consultant").addEventListener("click", () => {
-      consultantSaveBeforeNewDialog.close();
-      startNewManagedConsultant();
-    });
-
-    document.querySelector("#save-managed-consultant-and-add").addEventListener("click", async () => {
-      consultantSaveBeforeNewDialog.close();
-      const saved = await saveManagedConsultant();
-      if (!saved) return;
-      startNewManagedConsultant();
-      showManagedConsultantSaveStatus(saved);
-    });
-
-    consultantSaveBeforeNewDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
     });
 
     async function loadPasswordResetRequests() {
