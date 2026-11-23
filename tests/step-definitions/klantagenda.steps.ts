@@ -188,11 +188,39 @@ When("ik vandaag op een later tijdstip een afspraak aanvraag", async ({ page }) 
   test.skip(isWeekend(now), "Vandaag is een weekenddag: geen afspraken mogelijk.");
   const hour = now.getHours() + 1;
   test.skip(hour < 8 || hour > 17, "Huidige tijd valt buiten de werktijd.");
-  const reason = uniqueReason();
+
+  const optionsResponse = await page.request.get("/api/appointment-options");
+  expect(optionsResponse.ok()).toBe(true);
+  const options = await optionsResponse.json() as {
+    consultants: Array<{
+      username: string;
+      name: string;
+      locationId: string | number;
+      werkdagen: string | null;
+    }>;
+  };
+  const weekday = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"][now.getDay()];
+  const consultant = options.consultants.find((option) =>
+    String(option.werkdagen || "")
+      .toLocaleLowerCase("nl-NL")
+      .includes(weekday.toLocaleLowerCase("nl-NL")),
+  );
+  test.skip(!consultant, `Er is vandaag geen consultant beschikbaar op ${weekday}.`);
+  if (!consultant) throw new Error(`Er is vandaag geen consultant beschikbaar op ${weekday}.`);
+
   const app = getContext(page).app;
-  const result = await app.create({ date: now, slot: { hour, minute: "00" }, reason });
+  await app.location.selectOption(String(consultant.locationId));
+  await app.consultant.selectOption(consultant.username);
+  const reason = uniqueReason();
+  const result = await app.create({
+    date: now,
+    slot: { hour, minute: "00" },
+    reason,
+    location: null,
+    consultant: null,
+  });
   Object.assign(getContext(page), {
-    consultantName: result.consultantName,
+    consultantName: consultant.name,
     range: result.range,
     date: now,
     reason,

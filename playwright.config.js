@@ -24,6 +24,7 @@ export default defineConfig({
     {
       name: "bdd",
       testDir: bddConfig,
+      workers: 1,
     },
   ],
   reporter: [
