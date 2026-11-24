@@ -12,7 +12,10 @@ export function initProfile() {
       const response = await fetch("/api/profile");
       const profile = await response.json();
       if (!response.ok) throw new Error(profile.error || "Profiel laden is mislukt.");
-      for (const fieldName of ["username", "voornaam", "tussenvoegsel", "achternaam", "telefoonnummer"]) {
+      for (const fieldName of [
+        "username", "voornaam", "tussenvoegsel", "achternaam", "email",
+        "telefoonnummer", "straat", "postcode", "woonplaats",
+      ]) {
         profileForm.elements[fieldName].value = profile[fieldName] || "";
       }
       profileDialog.showModal();
@@ -43,7 +46,8 @@ export function initProfile() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Profiel opslaan is mislukt.");
-      document.querySelector("#consultant-name").textContent = result.name;
+      const username = profile.username ? ` (${profile.username})` : "";
+      document.querySelector("#consultant-name").textContent = `${result.name}${username}`;
       profileDialog.close();
       setStorageStatus("Je profiel is bijgewerkt.");
     } catch (error) {

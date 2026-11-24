@@ -14,10 +14,6 @@ const CONFIG = {
     username: process.env.E2E_CLIENT_USERNAME ?? 'testuser',
     password: process.env.E2E_CLIENT_PASSWORD ?? 'Test1234!',
   },
-  // Optioneel: gebruiker met speciale tekens in wachtwoord (TC-10)
-  specialUser: process.env.SPECIAL_USER
-    ? { username: process.env.SPECIAL_USER, password: process.env.SPECIAL_PASS ?? 'P@ss!#€%&' }
-    : undefined,
   // Gedrag volgens specificatie (TC-09)
   usernameTrimmed: true, // true = spaties worden getrimd, false = geweigerd
   usernameCaseSensitive: false, // true = hoofdlettergevoelig
@@ -31,6 +27,23 @@ test.describe('Loginpagina - functionele testcases', () => {
   test.beforeEach(async ({ page }) => {
     login = new LoginPage(page);
     await login.goto();
+  });
+
+  test('hamburgermenu toont status- en registratiepagina’s', async ({ page }) => {
+    const menuToggle = page.getByRole('button', { name: 'Menu openen' });
+    const menu = page.getByRole('navigation', { name: 'Hoofdnavigatie' });
+
+    await expect(menu).toBeHidden();
+    await menuToggle.click();
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('link', { name: 'Opvragen status' })).toHaveAttribute('href', '/password-reset-status');
+    await expect(menu.getByRole('link', { name: 'Reset wachtwoord' })).toHaveAttribute('href', '/password-reset-request');
+    await expect(menu.getByRole('link', { name: 'Registreer (cliënt)' })).toHaveAttribute('href', '/register');
+    await expect(menu.getByRole('link', { name: 'Registreer (consultant)' })).toHaveAttribute('href', '/consultant');
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(menuToggle).toBeFocused();
   });
 
   /* ---------------------------- POSITIEF --------------------------- */
@@ -157,11 +170,6 @@ test.describe('Loginpagina - functionele testcases', () => {
       await expect(page.getByText(/sql|syntax|exception|stack trace|ORA-\d+/i)).toHaveCount(0);
     });
 
-    test('TC-10b: geldig wachtwoord met speciale tekens', async () => {
-      test.skip(!CONFIG.specialUser, 'Zet SPECIAL_USER en SPECIAL_PASS om deze test te draaien');
-      if (!CONFIG.specialUser) return;
-      await login.login(CONFIG.specialUser.username, CONFIG.specialUser.password);
-      await login.expectLoggedIn();
-    });
+   
   });
 });

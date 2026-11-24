@@ -10,12 +10,19 @@
 <body class="login-page">
   <main class="login-shell">
     <section class="login-panel" aria-labelledby="login-title">
-      <a class="password-reset-status-link" href="/password-reset-status" aria-label="Wachtwoordaanvraagstatus bekijken" title="Wachtwoordaanvraagstatus bekijken">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 7v5l3 2" />
-        </svg>
-      </a>
+      <div class="login-menu">
+        <button class="login-menu-toggle" id="login-menu-toggle" type="button" aria-label="Menu openen" aria-expanded="false" aria-controls="login-menu">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <nav class="login-menu-items" id="login-menu" aria-label="Hoofdnavigatie" hidden>
+          <a href="/password-reset-status">Opvragen status</a>
+          <a href="/password-reset-request">Reset wachtwoord</a>
+          <a href="/register">Registreer (cliënt)</a>
+          <a href="/consultant">Registreer (consultant)</a>
+        </nav>
+      </div>
       <div class="brand login-brand" aria-label="Agenda">
         <span class="brand-mark" aria-hidden="true">&#128197;</span>
         <span>Cliëntenagenda</span>
@@ -35,21 +42,27 @@
         <p class="login-error" id="login-error" role="alert" hidden></p>
         <button class="primary-button" type="submit">Inloggen</button>
       </form>
-      <p class="login-copy register-prompt"><a id="password-reset-request-link" href="/password-reset-request">Nieuw wachtwoord aanvragen</a></p>
-      <p class="login-copy register-prompt">Nog geen account? <a href="/register">Registreer als cliënt</a>.</p>
     </section>
   </main>
   <script>
-    const resetRequestLink = document.querySelector("#password-reset-request-link");
-    const loginUsernameInput = document.querySelector("#username");
-    loginUsernameInput.addEventListener("input", () => {
-      const username = loginUsernameInput.value.trim();
-      if (username) sessionStorage.setItem("passwordResetUsername", username);
-      else sessionStorage.removeItem("passwordResetUsername");
+    const loginMenuToggle = document.querySelector("#login-menu-toggle");
+    const loginMenu = document.querySelector("#login-menu");
+    const setLoginMenuOpen = (isOpen) => {
+      loginMenu.hidden = !isOpen;
+      loginMenuToggle.setAttribute("aria-expanded", String(isOpen));
+      loginMenuToggle.setAttribute("aria-label", isOpen ? "Menu sluiten" : "Menu openen");
+    };
+    loginMenuToggle.addEventListener("click", () => {
+      setLoginMenuOpen(loginMenuToggle.getAttribute("aria-expanded") !== "true");
     });
-    resetRequestLink.addEventListener("click", () => {
-      const username = loginUsernameInput.value.trim();
-      if (username) sessionStorage.setItem("passwordResetUsername", username);
+    loginMenu.addEventListener("click", (event) => {
+      if (event.target.closest("a")) setLoginMenuOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !loginMenu.hidden) {
+        setLoginMenuOpen(false);
+        loginMenuToggle.focus();
+      }
     });
 
     document.querySelector("#login-form").addEventListener("submit", async (event) => {

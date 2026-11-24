@@ -34,12 +34,15 @@ async function loadAppointments() {
     setClientSession(isClientSession);
     document.querySelector(".summary").classList.toggle("is-client", isClientSession);
     document.querySelector("#requested-summary").hidden = isClientSession;
-    document.querySelector("#consultant-name").textContent = consultant.name;
+    const username = consultant.username ? ` (${consultant.username})` : "";
+    document.querySelector("#consultant-name").textContent = `${consultant.name}${username}`;
     if (consultant.role !== "client") setConsultantWorkdays(consultant.werkdagen);
     const locationLabel = document.querySelector("#consultant-location");
     locationLabel.textContent = consultant.locationName ? `Locatie: ${consultant.locationName}` : "";
     locationLabel.hidden = !consultant.locationName;
     document.querySelector("#settings-button").hidden = isClientSession;
+    document.querySelector("#manage-locations-button").hidden = isClientSession || consultant.isBeheerder !== true;
+    document.querySelector("#manage-consultant-button").hidden = isClientSession || consultant.isBeheerder !== true;
     if (isClientSession) {
       document.querySelector("#profile-button").hidden = false;
       document.querySelector(".workspace").classList.add("client-workspace");
@@ -104,8 +107,24 @@ document.querySelector("#today-label").textContent = new Intl.DateTimeFormat("nl
   year: "numeric",
 }).format(new Date());
 
-document.querySelector("#settings-button").addEventListener("click", () => {
-  window.location.href = "/settings";
+const dashboardMenuToggle = document.querySelector("#dashboard-menu-toggle");
+const dashboardMenu = document.querySelector("#dashboard-menu");
+const setDashboardMenuOpen = (isOpen) => {
+  dashboardMenu.hidden = !isOpen;
+  dashboardMenuToggle.setAttribute("aria-expanded", String(isOpen));
+  dashboardMenuToggle.setAttribute("aria-label", isOpen ? "Menu sluiten" : "Menu openen");
+};
+dashboardMenuToggle.addEventListener("click", () => {
+  setDashboardMenuOpen(dashboardMenuToggle.getAttribute("aria-expanded") !== "true");
+});
+dashboardMenu.addEventListener("click", (event) => {
+  if (event.target.closest("a, button")) setDashboardMenuOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !dashboardMenu.hidden) {
+    setDashboardMenuOpen(false);
+    dashboardMenuToggle.focus();
+  }
 });
 
 document.querySelector("#logout-button").addEventListener("click", async (event) => {

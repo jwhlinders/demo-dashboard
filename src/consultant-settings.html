@@ -32,9 +32,29 @@
     <section class="settings-panel" aria-labelledby="settings-title">
       <div class="settings-topbar">
         <div class="settings-heading">
-          <p class="eyebrow">Accountgegevens</p>
+          <p class="eyebrow" id="settings-eyebrow">Accountgegevens</p>
           <h1 id="settings-title">Instellingen</h1>
         </div>
+      </div>
+
+      <div class="settings-form" id="managed-consultant-picker" hidden>
+        <section class="settings-section" aria-label="Consultants beheren">
+          <div class="settings-stack">
+            <div class="field-row">
+              <label class="field-label" for="managed-consultant-select">Consultant</label>
+              <div class="location-select-control">
+                <select id="managed-consultant-select" disabled>
+                  <option value="" selected>Selecteer een consultant</option>
+                </select>
+                <button class="primary-button location-add-button" id="add-managed-consultant" type="button" aria-label="Nieuwe consultant toevoegen" title="Nieuwe consultant toevoegen" disabled>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       <form class="settings-form" id="settings-form">
@@ -43,10 +63,19 @@
           <div class="settings-stack">
             <div class="field-row field-row-name">
               <span class="field-label">Naam</span>
-              <div class="field-inline-grid no-sub-labels">
-                <input id="setting-first-name" name="voornaam" type="text" maxlength="80" autocomplete="given-name" aria-label="Voornaam">
-                <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="80" aria-label="Tussenvoegsel">
-                <input id="setting-last-name" name="achternaam" type="text" maxlength="80" autocomplete="family-name" aria-label="Achternaam">
+              <div class="field-inline-grid">
+                <div class="subfield">
+                  <label for="setting-first-name">Voornaam</label>
+                  <input id="setting-first-name" name="voornaam" type="text" maxlength="20" autocomplete="given-name">
+                </div>
+                <div class="subfield">
+                  <label for="setting-prefix">Tussenvoegsel</label>
+                  <input id="setting-prefix" name="tussenvoegsel" type="text" maxlength="20">
+                </div>
+                <div class="subfield">
+                  <label for="setting-last-name">Achternaam</label>
+                  <input id="setting-last-name" name="achternaam" type="text" maxlength="40" autocomplete="family-name">
+                </div>
               </div>
             </div>
 
@@ -57,7 +86,7 @@
 
             <div class="field-row">
               <label class="field-label" for="setting-phone">Telefoonnummer</label>
-              <input id="setting-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
+              <input id="setting-phone" name="telefoonnummer" type="text" readonly>
             </div>
           </div>
         </section>
@@ -132,8 +161,11 @@
         <div class="settings-actions">
           <button class="secondary-button" id="cancel-button" type="button">Annuleren</button>
           <button class="primary-button" type="button" id="save-button">Opslaan</button>
+          <button class="secondary-button" id="add-another-consultant-button" type="button" hidden>Nieuw consultant</button>
+          <button class="primary-button" id="done-adding-consultants-button" type="button" hidden>OK</button>
         </div>
       </form>
+
       <section class="settings-form" aria-labelledby="password-reset-requests-title">
         <section class="settings-section" aria-labelledby="password-reset-requests-title">
           <h3 id="password-reset-requests-title">Wachtwoordaanvragen</h3>
@@ -146,28 +178,9 @@
     </section>
   </main>
 
+  <script src="/confirmation-dialog.js"></script>
   <script>
     const settingsError = document.querySelector("#settings-error");
-    let locationsById = new Map();
-
-    function updateLocationDetails() {
-      const location = locationsById.get(document.querySelector("#setting-default-location").value);
-      for (const fieldId of ["setting-adres", "setting-postcode", "setting-plaats"]) {
-        const field = document.querySelector(`#${fieldId}`);
-        field.readOnly = true;
-        field.setAttribute("aria-readonly", "true");
-      }
-      const addressFields = {
-        "setting-adres": location?.adres || "",
-        "setting-postcode": location?.postcode || "",
-        "setting-plaats": location?.plaats || "",
-      };
-      for (const [fieldId, value] of Object.entries(addressFields)) {
-        document.querySelector(`#${fieldId}`).value = value;
-      }
-    }
-
-    document.querySelector("#setting-default-location").addEventListener("change", updateLocationDetails);
 
     async function loadPasswordResetRequests() {
       const list = document.querySelector("#password-reset-requests");
@@ -244,6 +257,8 @@
         if (!locationsResponse.ok) throw new Error(locations.error || "Locaties konden niet worden geladen.");
 
         const consultant = result;
+        const isBeheerder = typeof consultant.functie === "string"
+          && consultant.functie.trim().toLocaleLowerCase("nl-NL") === "beheerder";
         const fields = {
           voornaam: consultant.voornaam || "",
           tussenvoegsel: consultant.tussenvoegsel || "",
@@ -262,6 +277,9 @@
         document.querySelector("#setting-last-name").value = fields.achternaam;
         document.querySelector("#setting-email").value = fields.email;
         document.querySelector("#setting-phone").value = fields.telefoonnummer;
+        document.querySelector("#setting-home-street").value = consultant.address_street || "";
+        document.querySelector("#setting-home-postcode").value = consultant.address_postcode || "";
+        document.querySelector("#setting-home-city").value = consultant.address_city || "";
         document.querySelector("#setting-role").value = fields.role;
         const locationSelect = document.querySelector("#setting-default-location");
         locationsById = new Map(locations.map((location) => [String(location.id), location]));
@@ -279,9 +297,6 @@
         const name = [consultant.voornaam, consultant.tussenvoegsel, consultant.achternaam].filter(Boolean).join(" ") || "Instellingen";
         const username = consultant.username ? ` (${consultant.username})` : "";
         document.querySelector("#consultant-name").textContent = `${name}${username}`;
-        const locationLabel = document.querySelector("#consultant-location");
-        locationLabel.textContent = fields.defaultlocatie ? `Locatie: ${fields.defaultlocatie}` : "";
-        locationLabel.hidden = !fields.defaultlocatie;
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden geladen.";
         settingsError.hidden = false;
@@ -292,10 +307,43 @@
       window.location.href = "/";
     });
     document.querySelector("#cancel-button").addEventListener("click", () => {
-      window.location.href = "/";
+      if (creatingConsultant) {
+        if (isDedicatedConsultantPage) {
+          window.location.href = "/";
+          return;
+        }
+        setConsultantFormMode(false);
+        document.querySelector("#settings-status").hidden = true;
+        settingsError.hidden = true;
+      } else {
+        window.location.href = "/";
+      }
+    });
+    document.querySelector("#add-another-consultant-button").addEventListener("click", () => {
+      setConsultantFormMode(true);
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
+    });
+    document.querySelector("#done-adding-consultants-button").addEventListener("click", () => {
+      if (isDedicatedConsultantPage) {
+        window.location.href = "/";
+        return;
+      }
+      setConsultantFormMode(false);
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
     });
     document.querySelector("#save-button").addEventListener("click", async (event) => {
+      if (isDedicatedConsultantPage) {
+        const saved = await saveManagedConsultant();
+        if (!saved) return;
+        if (saved.created) startNewManagedConsultant();
+        showManagedConsultantSaveStatus(saved);
+        return;
+      }
+
       const button = event.currentTarget;
+      if (!document.querySelector("#settings-form").reportValidity()) return;
       const status = document.querySelector("#settings-status");
       settingsError.hidden = true;
       status.hidden = true;
@@ -303,42 +351,20 @@
       const werkdagen = [...document.querySelectorAll("[data-weekday]:checked")]
         .map((checkbox) => checkbox.dataset.weekday);
       try {
-        const locationSelect = document.querySelector("#setting-default-location");
-        if (!locationSelect.value) throw new Error("Kies een werklocatie.");
-        const voornaam = document.querySelector("#setting-first-name").value.trim();
-        const tussenvoegsel = document.querySelector("#setting-prefix").value.trim();
-        const achternaam = document.querySelector("#setting-last-name").value.trim();
-        const name = [voornaam, tussenvoegsel, achternaam].filter(Boolean).join(" ");
-        const response = await fetch("/api/consultant/settings", {
+        const response = await fetch("/api/consultant/settings/workdays", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            voornaam,
-            tussenvoegsel,
-            achternaam,
-            email: document.querySelector("#setting-email").value.trim(),
-            telefoonnummer: document.querySelector("#setting-phone").value.trim(),
-            functie: document.querySelector("#setting-role").value.trim(),
-            start_werkdag: document.querySelector("#setting-start-werkdag").value,
-            einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
-            werkdagen,
-            defaultlocatie: Number(locationSelect.value),
-          }),
+          body: JSON.stringify({ werkdagen }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Instellingen konden niet worden opgeslagen.");
-        const username = document.querySelector("#consultant-name").textContent.match(/\(([^)]+)\)$/)?.[0] || "";
-        document.querySelector("#consultant-name").textContent = `${name || "Instellingen"} ${username}`.trim();
-        const locationLabel = document.querySelector("#consultant-location");
-        locationLabel.textContent = `Locatie: ${locationSelect.selectedOptions[0].textContent}`;
-        locationLabel.hidden = false;
-        status.textContent = "Instellingen zijn opgeslagen.";
+        if (!response.ok) throw new Error(result.error || "Werkdagen konden niet worden opgeslagen.");
+        status.textContent = "Werkdagen zijn opgeslagen.";
         status.hidden = false;
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden opgeslagen.";
         settingsError.hidden = false;
       } finally {
-        button.disabled = false;
+        button.disabled = creatingConsultant && consultantCreated;
       }
     });
     document.querySelector("#logout-button").addEventListener("click", async () => {

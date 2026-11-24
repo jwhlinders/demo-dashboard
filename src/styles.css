@@ -53,29 +53,64 @@ body {
   animation: arrive 420ms ease-out both;
 }
 
-.password-reset-status-link {
+.login-menu {
   position: absolute;
   top: 18px;
   right: 18px;
+  z-index: 1;
+}
+
+.login-menu-toggle {
   display: grid;
   width: 36px;
   height: 36px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  border-radius: 7px;
   color: var(--green-dark);
   background: var(--paper);
+  cursor: pointer;
 }
 
-.password-reset-status-link:hover,
-.password-reset-status-link:focus-visible {
+.login-menu-toggle:hover,
+.login-menu-toggle:focus-visible {
   color: var(--green);
   background: var(--green-pale);
 }
 
-.password-reset-status-link svg {
+.login-menu-toggle svg {
   width: 19px;
   height: 19px;
+}
+
+.login-menu-items {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  display: grid;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  box-shadow: 0 12px 28px rgba(32, 42, 38, 0.14);
+}
+
+.login-menu-items[hidden] {
+  display: none;
+}
+
+.login-menu-items a {
+  padding: 10px 12px;
+  border-radius: 4px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.login-menu-items a:hover,
+.login-menu-items a:focus-visible {
+  color: var(--green-dark);
+  background: var(--green-pale);
 }
 
 .login-brand {
@@ -88,15 +123,28 @@ body {
 
 .login-panel #login-form,
 .login-panel #reset-request-form,
-.login-panel #reset-status-form {
+.login-panel #reset-status-form,
+.login-panel #consultant-register-form {
   display: grid;
   grid-template-columns: 112px minmax(0, 20ch);
   gap: 10px;
 }
 
+.login-panel #consultant-register-form .registration-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 20ch);
+  gap: 10px;
+}
+
+.login-panel #consultant-register-form .registration-fields[hidden] {
+  display: none;
+}
+
 .login-panel #login-form .field,
 .login-panel #reset-request-form .field,
-.login-panel #reset-status-form .field {
+.login-panel #reset-status-form .field,
+.login-panel #consultant-register-form .field {
   grid-column: 1 / -1;
   grid-template-columns: 112px minmax(0, 1fr);
   align-items: center;
@@ -105,7 +153,8 @@ body {
 
 .login-panel #login-form input,
 .login-panel #reset-request-form input,
-.login-panel #reset-status-form input {
+.login-panel #reset-status-form input,
+.login-panel #consultant-register-form input {
   width: 100%;
   min-height: 24px;
   padding: 0 8px;
@@ -119,9 +168,28 @@ body {
   grid-column: 1 / -1;
 }
 
+.login-panel #consultant-register-form > .login-error,
+.login-panel #consultant-register-form > .register-success {
+  grid-column: 1 / -1;
+}
+
 .login-panel #login-form > .primary-button,
 .login-panel #reset-request-form > .primary-button,
-.login-panel #reset-status-form > .primary-button {
+.login-panel #reset-status-form > .primary-button,
+.login-panel #consultant-register-form > .primary-button {
+  grid-column: 2;
+  width: 100%;
+  min-height: 24px;
+  padding: 0 8px;
+  justify-self: start;
+}
+
+.login-panel #consultant-register-form .registration-fields > .login-copy {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.login-panel #consultant-register-form .registration-fields > .primary-button {
   grid-column: 2;
   width: 100%;
   min-height: 24px;
@@ -354,6 +422,83 @@ body {
   display: none;
 }
 
+.dashboard-menu {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-menu-toggle {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.dashboard-menu-toggle:hover,
+.dashboard-menu-toggle:focus-visible {
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+.dashboard-menu-toggle:focus-visible,
+.dashboard-menu-link:focus-visible {
+  outline: 3px solid rgba(206, 112, 87, 0.65);
+  outline-offset: 3px;
+}
+
+.dashboard-menu-toggle svg {
+  width: 19px;
+  height: 19px;
+}
+
+.dashboard-menu-items {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  box-shadow: 0 12px 28px rgba(32, 42, 38, 0.14);
+}
+
+.dashboard-menu-items[hidden] {
+  display: none;
+}
+
+.dashboard-menu-link {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dashboard-menu-link[hidden] {
+  display: none;
+}
+
+.dashboard-menu-link:hover {
+  color: var(--green-dark);
+  background: var(--green-pale);
+}
+
 .settings-page {
   min-height: 100vh;
   background: var(--canvas);
@@ -384,6 +529,11 @@ body {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.locations-page .settings-topbar,
+.consultant-management-page .settings-topbar {
+  padding: 14px 24px;
+}
+
 .settings-heading {
   display: flex;
   flex-direction: column;
@@ -394,6 +544,10 @@ body {
   display: grid;
   gap: 12px;
   padding: 18px;
+}
+
+.settings-form[hidden] {
+  display: none;
 }
 
 .settings-section {
@@ -452,6 +606,60 @@ body {
   max-width: 820px;
 }
 
+.location-postcode-city {
+  display: grid;
+  grid-template-columns: 132px 11ch max-content minmax(0, 1fr);
+  gap: 12px;
+  max-width: 820px;
+}
+
+.location-postcode-input {
+  width: 11ch;
+  max-width: 100%;
+}
+
+.location-select-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-stack .location-select-control select {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+}
+
+.settings-stack .location-add-button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  flex: 0 0 40px;
+  margin-top: 0;
+  padding: 0;
+}
+
+.location-add-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-stack input.location-active-checkbox {
+  width: 15px;
+  min-height: 15px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--green);
+}
+
+#setting-username-row[hidden],
+#setting-authorisatiecode-row[hidden] {
+  display: none;
+}
+
 .field-row-name,
 .field-row-address,
 .field-row-hours {
@@ -482,7 +690,8 @@ body {
   gap: 8px;
 }
 
-.subfield span {
+.subfield span,
+.subfield label {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
@@ -593,6 +802,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .location-postcode-city {
+    grid-template-columns: 1fr;
+  }
+
   .field-inline-grid,
   .time-inline {
     grid-template-columns: 1fr;
@@ -655,6 +868,14 @@ body {
   margin-bottom: 5px;
 }
 
+.confirmation-dialog-title {
+  margin-bottom: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
 .dialog-close {
   width: 36px;
   height: 36px;
@@ -688,6 +909,20 @@ body {
   min-width: 126px;
   margin: 0;
   padding: 0 14px;
+}
+
+.confirmation-dialog .profile-actions {
+  justify-content: center;
+}
+
+.confirmation-dialog .profile-actions .secondary-button,
+.confirmation-dialog .profile-actions .primary-button {
+  min-width: 64px;
+  min-height: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 .register-confirmation-content {

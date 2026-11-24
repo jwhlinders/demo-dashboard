@@ -28,13 +28,15 @@ type PasswordResetRequest = {
 };
 
 type TestDatabasePool = {
-  query: (sql: string, values: unknown[]) => Promise<unknown>;
+  query: (sql: string, values: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
   end: () => Promise<void>;
 };
 
 const { Pool }: { Pool: new (options: { connectionString: string }) => TestDatabasePool } = require("pg");
 
 let database: TestDatabasePool | undefined;
+const newConsultantUsername = `pw-consultant-${Date.now()}`;
+const secondConsultantUsername = `${newConsultantUsername}-2`;
 
 async function login(page: Page, credentials: { username?: string; password?: string }) {
   test.skip(
@@ -103,6 +105,16 @@ test.afterAll(async () => {
       "DELETE FROM password_reset_requests WHERE client_username IN ($1, $2, $3)",
       [CONFIG.consultant.username!, CONFIG.clientUsername!, CONFIG.anotherClientUsername!],
     );
+    const removedConsultants = await database.query(
+      "DELETE FROM consultant WHERE username = ANY($1) RETURNING idadres",
+      [[newConsultantUsername, secondConsultantUsername]],
+    );
+    const addressIds = removedConsultants.rows
+      .map((consultant) => consultant.idadres)
+      .filter((idadres) => idadres !== null);
+    if (addressIds.length > 0) {
+      await database.query("DELETE FROM adres WHERE idadres = ANY($1::integer[])", [addressIds]);
+    }
   } finally {
     await database.end();
     database = undefined;
@@ -168,4 +180,249 @@ test("TC-03 Consultant can handle a client's password-reset request", async ({ p
     "client",
     "Cliënt",
   );
+});
+
+test("TC-04 Consultant cannot add another consultant", async ({ page }) => {
+  await login(page, CONFIG.consultant);
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  await expect(page.locator("#manage-consultant-button")).toBeHidden();
+  await page.goto("/settings");
+
+  await expect(page.locator("#add-consultant-button")).toHaveCount(0);
+  const response = await page.request.post(new URL("/api/consultants", page.url()).toString(), {
+    data: {},
+  });
+  expect(response.status()).toBe(403);
+  await page.goto("/beheer-consultant");
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("TC-05 Beheerder can add a consultant and receives a stored authorization code", async ({ page }) => {
+  await login(page, CONFIG.beheerder);
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  const manageConsultantLink = page.locator("#manage-consultant-button");
+  await expect(manageConsultantLink).toBeVisible();
+  await expect(manageConsultantLink).toHaveAttribute("href", "/beheer-consultant");
+  await manageConsultantLink.click();
+  await expect(page).toHaveURL(/\/beheer-consultant$/);
+  await expect(page.locator("#settings-eyebrow")).toHaveText("Beheer consultants");
+  await expect(page.locator("#settings-title")).toBeHidden();
+  const consultantSelect = page.locator("#managed-consultant-select");
+  await expect(consultantSelect).toBeEnabled();
+  const listedConsultants = await consultantSelect.locator("option").allTextContents();
+  expect(listedConsultants.join(" ")).not.toContain(CONFIG.beheerder.username!);
+  await expect(page.locator("#setting-username")).toBeVisible();
+  await expect(page.getByLabel("Tussenvoegsel")).toBeVisible();
+  await expect(page.locator("#setting-first-name")).toHaveAttribute("maxlength", "20");
+  await expect(page.locator("#setting-prefix")).toHaveAttribute("maxlength", "20");
+  await expect(page.locator("#setting-last-name")).toHaveAttribute("maxlength", "40");
+  await page.locator("#add-managed-consultant").click();
+  const invalidNameResponse = await page.request.post(new URL("/api/consultants", page.url()).toString(), {
+    data: { voornaam: "V".repeat(21), achternaam: "Bakker" },
+  });
+  expect(invalidNameResponse.status()).toBe(400);
+  expect((await invalidNameResponse.json()).error).toContain("maximaal 20");
+
+  await page.locator("#setting-first-name").fill("Playwright");
+  await page.locator("#setting-prefix").fill("van der");
+  await page.locator("#setting-last-name").fill("Consultant");
+  await page.locator("#setting-email").fill(`new-consultant-${Date.now()}@example.invalid`);
+  await page.locator("#setting-phone").fill("0612345678");
+  await page.locator("#setting-home-street").fill("Teststraat 42");
+  await page.locator("#setting-home-postcode").fill("1234 AB");
+  await page.locator("#setting-home-city").fill("Amsterdam");
+  await page.locator("#setting-username").fill(newConsultantUsername);
+  await page.locator("#setting-role").fill("Behandelaar");
+  await page.locator("#setting-default-location").selectOption({ index: 1 });
+  await page.locator("#setting-start-werkdag").fill("09:00");
+  await page.locator("#setting-einde-werkdag").fill("17:00");
+  await page.locator('[data-weekday="Ma"]').check();
+  await page.locator("#save-button").click();
+
+  const saveStatus = page.locator("#settings-status");
+  await expect(saveStatus).toContainText("Consultant is aangemaakt. Bewaar de authorisatiecode:");
+  const authorizationCodeMatch = (await saveStatus.innerText())
+    .match(/authorisatiecode: ([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8})\./);
+  expect(authorizationCodeMatch).not.toBeNull();
+  const authorisatiecode = authorizationCodeMatch?.[1];
+  expect(authorisatiecode).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/);
+
+  const storedCode = await database!.query(
+    "SELECT authorisatiecode FROM consultant WHERE username = $1",
+    [newConsultantUsername],
+  );
+  expect(storedCode.rows[0].authorisatiecode).toBe(authorisatiecode);
+  const storedPassword = await database!.query(
+    "SELECT password FROM consultant WHERE username = $1",
+    [newConsultantUsername],
+  );
+  expect(storedPassword.rows[0].password).toMatch(/^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/);
+  expect(storedPassword.rows[0].password).not.toBe("Welkom01");
+  const storedName = await database!.query(
+    "SELECT voornaam, tussenvoegsel, achternaam FROM consultant WHERE username = $1",
+    [newConsultantUsername],
+  );
+  expect(storedName.rows[0]).toEqual({
+    voornaam: "Playwright",
+    tussenvoegsel: "van der",
+    achternaam: "Consultant",
+  });
+  const storedAddress = await database!.query(`
+    SELECT address.straat, address.postcode, address.woonplaats
+    FROM consultant
+    INNER JOIN adres AS address ON address.idadres = consultant.idadres
+    WHERE consultant.username = $1
+  `, [newConsultantUsername]);
+  expect(storedAddress.rows[0]).toEqual({
+    straat: "Teststraat 42",
+    postcode: "1234AB",
+    woonplaats: "Amsterdam",
+  });
+  await expect(page.locator("#setting-first-name")).toBeEditable();
+  await expect(page.locator("#setting-first-name")).toHaveValue("");
+  await expect(page.locator("#setting-username")).toHaveValue("");
+
+  const longFirstName = "V".repeat(20);
+  const longPrefix = "T".repeat(20);
+  const longLastName = "A".repeat(40);
+  await page.locator("#setting-first-name").fill(longFirstName);
+  await page.locator("#setting-prefix").fill(longPrefix);
+  await page.locator("#setting-last-name").fill(longLastName);
+  await page.locator("#setting-email").fill(`new-consultant-${Date.now()}-2@example.invalid`);
+  await page.locator("#setting-phone").fill("0612345678");
+  await page.locator("#setting-home-street").fill("Dorpsstraat 8");
+  await page.locator("#setting-home-postcode").fill("2345 BC");
+  await page.locator("#setting-home-city").fill("Rotterdam");
+  await page.locator("#setting-username").fill(secondConsultantUsername);
+  await page.locator("#setting-role").fill("Behandelaar");
+  await page.locator("#setting-default-location").selectOption({ index: 1 });
+  await page.locator("#setting-start-werkdag").fill("09:00");
+  await page.locator("#setting-einde-werkdag").fill("17:00");
+  await page.locator('[data-weekday="Ma"]').check();
+  await page.locator("#save-button").click();
+  await expect(saveStatus).toContainText("Consultant is aangemaakt. Bewaar de authorisatiecode:");
+  const secondAuthorizationCodeMatch = (await saveStatus.innerText())
+    .match(/authorisatiecode: ([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8})\./);
+  expect(secondAuthorizationCodeMatch).not.toBeNull();
+  await expect(page.locator("#setting-first-name")).toBeEditable();
+  await expect(page.locator("#setting-first-name")).toHaveValue("");
+  const savedLongName = await database!.query(
+    "SELECT voornaam, tussenvoegsel, achternaam FROM consultant WHERE username = $1",
+    [secondConsultantUsername],
+  );
+  expect(savedLongName.rows[0]).toEqual({
+    voornaam: longFirstName,
+    tussenvoegsel: longPrefix,
+    achternaam: longLastName,
+  });
+
+  await page.locator("#back-button").click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("TC-06 Consultant can update and save address details", async ({ page }) => {
+  await login(page, CONFIG.consultant);
+  await page.goto("/settings");
+
+  const originalResult = await database!.query(`
+    SELECT consultant.idadres, address.straat, address.postcode, address.woonplaats
+    FROM consultant
+    LEFT JOIN adres AS address ON address.idadres = consultant.idadres
+    WHERE consultant.username = $1
+  `, [CONFIG.consultant.username!]);
+  const original = originalResult.rows[0];
+  const updated = {
+    straat: "Voorbeeldstraat 77",
+    postcode: "3456 CD",
+    woonplaats: "Gouda",
+  };
+
+  try {
+    await page.locator("#setting-home-street").fill(updated.straat);
+    await page.locator("#setting-home-postcode").fill(updated.postcode);
+    await page.locator("#setting-home-city").fill(updated.woonplaats);
+    await page.locator("#save-button").click();
+    await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
+
+    const settingsResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
+    expect(settingsResponse.ok()).toBeTruthy();
+    const saved = await settingsResponse.json();
+    expect(saved.address_street).toBe(updated.straat);
+    expect(saved.address_postcode).toBe("3456CD");
+    expect(saved.address_city).toBe(updated.woonplaats);
+  } finally {
+    const currentResult = await database!.query(
+      "SELECT idadres FROM consultant WHERE username = $1",
+      [CONFIG.consultant.username!],
+    );
+    const currentAddressId = currentResult.rows[0]?.idadres;
+    await database!.query(
+      "UPDATE consultant SET idadres = $1 WHERE username = $2",
+      [original.idadres, CONFIG.consultant.username!],
+    );
+    if (original.idadres !== null) {
+      await database!.query(
+        "UPDATE adres SET straat = $1, postcode = $2, woonplaats = $3 WHERE idadres = $4",
+        [original.straat, original.postcode, original.woonplaats, original.idadres],
+      );
+    }
+    if (currentAddressId !== null && currentAddressId !== original.idadres) {
+      await database!.query(`
+        DELETE FROM adres
+        WHERE idadres = $1
+          AND NOT EXISTS (SELECT 1 FROM consultant WHERE idadres = $1)
+          AND NOT EXISTS (SELECT 1 FROM klanten WHERE idadres = $1)
+      `, [currentAddressId]);
+    }
+  }
+});
+
+test("TC-07 Beheerder sees the same unsaved-changes dialog in consultant and location management", async ({ page }) => {
+  await login(page, CONFIG.beheerder);
+  await page.goto("/beheer-consultant");
+
+  const consultantSelect = page.locator("#managed-consultant-select");
+  await expect(consultantSelect).toBeEnabled();
+  test.skip(
+    await consultantSelect.locator("option").count() < 2,
+    "Er is een consultant nodig om de wijzigingen-dialoog te openen.",
+  );
+  await consultantSelect.selectOption({ index: 1 });
+  const firstName = page.locator("#setting-first-name");
+  await firstName.fill((await firstName.inputValue()) === "Dialoog test" ? "Andere test" : "Dialoog test");
+  await page.locator("#add-managed-consultant").click();
+
+  const consultantDialog = page.locator(".confirmation-dialog");
+  await expect(consultantDialog).toBeVisible();
+  await expect(consultantDialog.locator("h2")).toHaveText(
+    "Wilt u de wijzigingen opslaan voordat u een nieuwe consultant invoert?",
+  );
+  const consultantLayout = await consultantDialog.evaluate((dialog) =>
+    [...dialog.children].map((child) => child.className),
+  );
+  await consultantDialog.getByRole("button", { name: "Nee" }).click();
+
+  await page.goto("/locaties");
+  const locationSelect = page.locator("#location-select");
+  await expect(locationSelect).toBeEnabled();
+  test.skip(
+    await locationSelect.locator("option").count() < 2,
+    "Er is een locatie nodig om de wijzigingen-dialoog te openen.",
+  );
+  await locationSelect.selectOption({ index: 1 });
+  const locationName = page.locator("#location-name");
+  await locationName.fill((await locationName.inputValue()) === "Dialoog test" ? "Andere test" : "Dialoog test");
+  await page.locator("#add-location-button").click();
+
+  const locationDialog = page.locator(".confirmation-dialog");
+  await expect(locationDialog).toBeVisible();
+  await expect(locationDialog.locator("h2")).toHaveText(
+    "Wilt u de wijzigingen opslaan voordat u een nieuwe locatie invoert?",
+  );
+  const locationLayout = await locationDialog.evaluate((dialog) =>
+    [...dialog.children].map((child) => child.className),
+  );
+  expect(locationLayout).toEqual(consultantLayout);
+  await locationDialog.getByRole("button", { name: "Nee" }).click();
+  await expect(locationDialog).toBeHidden();
 });
