@@ -86,7 +86,17 @@
 
             <div class="field-row">
               <label class="field-label" for="setting-phone">Telefoonnummer</label>
-              <input id="setting-phone" name="telefoonnummer" type="text">
+              <input id="setting-phone" name="telefoonnummer" type="tel" maxlength="30" autocomplete="tel">
+            </div>
+
+            <div class="field-row" id="setting-username-row" hidden>
+              <label class="field-label" for="setting-username">Gebruikersnaam</label>
+              <input id="setting-username" name="username" type="text" maxlength="80" autocomplete="username">
+            </div>
+
+            <div class="field-row" id="setting-authorisatiecode-row" hidden>
+              <label class="field-label" for="setting-authorisatiecode">Authorisatiecode</label>
+              <input id="setting-authorisatiecode" name="authorisatiecode" type="text" readonly aria-readonly="true" placeholder="Wordt gegenereerd bij opslaan">
             </div>
           </div>
         </section>
@@ -205,6 +215,94 @@
     let creatingConsultant = false;
     let consultantCreated = false;
     const isDedicatedConsultantPage = window.location.pathname === "/beheer-consultant";
+    const createConsultantRequested = isDedicatedConsultantPage
+      || new URLSearchParams(window.location.search).get("new-consultant") === "true";
+    const managedConsultantPicker = document.querySelector("#managed-consultant-picker");
+    const managedConsultantSelect = document.querySelector("#managed-consultant-select");
+    const addManagedConsultantButton = document.querySelector("#add-managed-consultant");
+    const consultantSaveBeforeNewDialog = window.ConfirmationDialog.create({
+      title: "Wilt u de wijzigingen opslaan voordat u een nieuwe consultant invoert?",
+      onDiscard: startNewManagedConsultant,
+      onConfirm: async () => {
+        const saved = await saveManagedConsultant();
+        if (!saved) return;
+        startNewManagedConsultant();
+        showManagedConsultantSaveStatus(saved);
+      },
+    });
+    const managedConsultantsByUsername = new Map();
+    let managedFormBaseline = "";
+
+    function getManagedFormState() {
+      return JSON.stringify([...document.querySelectorAll("#settings-form input, #settings-form select, #settings-form textarea")]
+        .map((field) => [field.id, field.type === "checkbox" ? field.checked : field.value]));
+    }
+
+    function managedFormHasChanges() {
+      return getManagedFormState() !== managedFormBaseline;
+    }
+
+    function setManagedFormBaseline() {
+      managedFormBaseline = getManagedFormState();
+    }
+
+    function configureDedicatedConsultantPage() {
+      document.body.classList.add("consultant-management-page");
+      managedConsultantPicker.hidden = false;
+      document.title = "Beheer consultants | Cliëntenagenda";
+      document.querySelector("#settings-title").hidden = true;
+      document.querySelector("#settings-eyebrow").textContent = "Beheer consultants";
+      document.querySelector(".settings-panel").setAttribute("aria-labelledby", "settings-eyebrow");
+      document.querySelector("#password-reset-requests-title").closest(".settings-form").hidden = true;
+    }
+
+    function setConsultantFieldsReadOnly(readOnly) {
+      for (const input of document.querySelectorAll("#settings-form input")) {
+        if (input.type === "checkbox") {
+          input.disabled = readOnly;
+        } else if (!["setting-adres", "setting-postcode", "setting-plaats", "setting-authorisatiecode"].includes(input.id)) {
+          input.readOnly = readOnly;
+        }
+      }
+      for (const select of document.querySelectorAll("#settings-form select")) {
+        select.disabled = readOnly;
+      }
+    }
+
+    function setConsultantFormMode(isCreating) {
+      creatingConsultant = isCreating;
+      consultantCreated = false;
+      if (isDedicatedConsultantPage) {
+        configureDedicatedConsultantPage();
+      } else {
+        document.querySelector("#settings-eyebrow").textContent = isCreating ? "Nieuw account" : "Accountgegevens";
+        document.querySelector("#settings-title").textContent = isCreating ? "Nieuw consultant" : "Instellingen";
+      }
+      document.querySelector("#password-reset-requests-title").closest(".settings-form").hidden = isCreating || isDedicatedConsultantPage;
+      document.querySelector("#setting-username-row").hidden = !isCreating;
+      document.querySelector("#setting-authorisatiecode-row").hidden = !isCreating;
+      document.querySelector("#setting-username").required = isCreating;
+      for (const fieldId of ["setting-home-street", "setting-home-postcode", "setting-home-city"]) {
+        document.querySelector(`#${fieldId}`).required = isCreating;
+      }
+      const saveButton = document.querySelector("#save-button");
+      saveButton.textContent = isCreating ? "Consultant toevoegen" : "Opslaan";
+      saveButton.disabled = false;
+      document.querySelector("#cancel-button").hidden = false;
+      saveButton.hidden = false;
+      document.querySelector("#add-another-consultant-button").hidden = true;
+      document.querySelector("#done-adding-consultants-button").hidden = true;
+      document.querySelector("#setting-authorisatiecode").value = "";
+      setConsultantFieldsReadOnly(false);
+      if (isCreating) {
+        document.querySelector("#settings-form").reset();
+        document.querySelector("#setting-default-location").value = "";
+        updateLocationDetails();
+      } else {
+        loadConsultantSettings();
+      }
+      if (isDedicatedConsultantPage) setManagedFormBaseline();
+    }
 
     function updateLocationDetails() {
       const location = locationsById.get(document.querySelector("#setting-default-location").value);
@@ -222,6 +320,206 @@
         document.querySelector(`#${fieldId}`).value = value;
       }
     }
+
+    function managedConsultantOptionText(consultant) {
+      const name = [consultant.voornaam, consultant.tussenvoegsel, consultant.achternaam].filter(Boolean).join(" ");
+      return `${name || consultant.username} (${consultant.username})`;
+    }
+
+    async function loadManagedConsultants() {
+      try {
+        const response = await fetch("/api/consultants");
+        const consultants = await response.json();
+        if (!response.ok) throw new Error(consultants.error || "Consultants konden niet worden geladen.");
+
+        const placeholder = new Option("Selecteer een consultant", "", true, true);
+        placeholder.disabled = true;
+        managedConsultantSelect.replaceChildren(placeholder);
+        for (const consultant of consultants) {
+          managedConsultantsByUsername.set(consultant.username, consultant);
+          managedConsultantSelect.add(new Option(managedConsultantOptionText(consultant), consultant.username));
+        }
+      } catch (error) {
+        settingsError.textContent = error.message || "Consultants konden niet worden geladen.";
+        settingsError.hidden = false;
+        const placeholder = new Option("Selecteer een consultant", "", true, true);
+        placeholder.disabled = true;
+        managedConsultantSelect.replaceChildren(placeholder);
+      } finally {
+        managedConsultantSelect.disabled = false;
+        addManagedConsultantButton.disabled = false;
+      }
+    }
+
+    function setManagedConsultant(consultant) {
+      creatingConsultant = false;
+      consultantCreated = false;
+      document.querySelector("#settings-form").reset();
+      setConsultantFieldsReadOnly(false);
+
+      document.querySelector("#settings-eyebrow").textContent = "Beheer consultants";
+      document.querySelector("#settings-title").hidden = true;
+      document.querySelector("#password-reset-requests-title").closest(".settings-form").hidden = true;
+      document.querySelector("#setting-username-row").hidden = false;
+      document.querySelector("#setting-authorisatiecode-row").hidden = true;
+      document.querySelector("#setting-username").value = consultant.username;
+      document.querySelector("#setting-username").required = false;
+      document.querySelector("#setting-username").readOnly = true;
+      document.querySelector("#setting-authorisatiecode").value = "";
+      for (const fieldId of ["setting-home-street", "setting-home-postcode", "setting-home-city"]) {
+        const field = document.querySelector(`#${fieldId}`);
+        field.required = false;
+      }
+
+      document.querySelector("#setting-first-name").value = consultant.voornaam || "";
+      document.querySelector("#setting-prefix").value = consultant.tussenvoegsel || "";
+      document.querySelector("#setting-last-name").value = consultant.achternaam || "";
+      document.querySelector("#setting-email").value = consultant.email || "";
+      document.querySelector("#setting-phone").value = consultant.telefoonnummer || "";
+      document.querySelector("#setting-home-street").value = consultant.address_street || "";
+      document.querySelector("#setting-home-postcode").value = consultant.address_postcode || "";
+      document.querySelector("#setting-home-city").value = consultant.address_city || "";
+      document.querySelector("#setting-role").value = consultant.functie || "";
+      const locationSelect = document.querySelector("#setting-default-location");
+      locationSelect.value = String(consultant.defaultlocatie || "");
+      locationSelect.disabled = locationsById.size === 0;
+      updateLocationDetails();
+      for (const checkbox of document.querySelectorAll("[data-weekday]")) {
+        checkbox.checked = typeof consultant.werkdagen === "string"
+          && consultant.werkdagen.toLocaleLowerCase("nl-NL").includes(checkbox.dataset.weekday.toLocaleLowerCase("nl-NL"));
+      }
+      document.querySelector("#setting-start-werkdag").value = consultant.start_werkdag || "";
+      document.querySelector("#setting-einde-werkdag").value = consultant.einde_werkdag || "";
+      document.querySelector("#cancel-button").hidden = false;
+      document.querySelector("#save-button").textContent = "Opslaan";
+      document.querySelector("#save-button").hidden = false;
+      document.querySelector("#add-another-consultant-button").hidden = true;
+      document.querySelector("#done-adding-consultants-button").hidden = true;
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
+      setManagedFormBaseline();
+    }
+
+    function startNewManagedConsultant() {
+      managedConsultantSelect.value = "";
+      setConsultantFormMode(true);
+      document.querySelector("#settings-status").hidden = true;
+      settingsError.hidden = true;
+    }
+
+    function showManagedConsultantSaveStatus(saved) {
+      const status = document.querySelector("#settings-status");
+      status.textContent = saved.created
+        ? `Consultant is aangemaakt. Bewaar de authorisatiecode: ${saved.authorisatiecode}.`
+        : "Consultantgegevens zijn opgeslagen.";
+      status.hidden = false;
+    }
+
+    async function saveManagedConsultant() {
+      const settingsForm = document.querySelector("#settings-form");
+      if (!settingsForm.reportValidity()) return null;
+
+      const saveButton = document.querySelector("#save-button");
+      const isCreating = creatingConsultant;
+      const username = isCreating ? "" : managedConsultantSelect.value;
+      if (!isCreating && !username) {
+        settingsError.textContent = "Selecteer een consultant om te wijzigen.";
+        settingsError.hidden = false;
+        return null;
+      }
+
+      settingsError.hidden = true;
+      document.querySelector("#settings-status").hidden = true;
+      saveButton.disabled = true;
+      managedConsultantSelect.disabled = true;
+      addManagedConsultantButton.disabled = true;
+      const werkdagen = [...document.querySelectorAll("[data-weekday]:checked")]
+        .map((checkbox) => checkbox.dataset.weekday);
+      const requestBody = {
+        voornaam: document.querySelector("#setting-first-name").value.trim(),
+        tussenvoegsel: document.querySelector("#setting-prefix").value.trim(),
+        achternaam: document.querySelector("#setting-last-name").value.trim(),
+        email: document.querySelector("#setting-email").value.trim(),
+        telefoonnummer: document.querySelector("#setting-phone").value.trim(),
+        straat: document.querySelector("#setting-home-street").value.trim(),
+        postcode: document.querySelector("#setting-home-postcode").value.trim(),
+        woonplaats: document.querySelector("#setting-home-city").value.trim(),
+        functie: document.querySelector("#setting-role").value.trim(),
+        start_werkdag: document.querySelector("#setting-start-werkdag").value,
+        einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
+        werkdagen,
+        defaultlocatie: Number(document.querySelector("#setting-default-location").value),
+      };
+      if (isCreating) requestBody.username = document.querySelector("#setting-username").value.trim();
+
+      try {
+        const response = await fetch(isCreating
+          ? "/api/consultants"
+          : `/api/consultants/${encodeURIComponent(username)}`, {
+          method: isCreating ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Consultantgegevens konden niet worden opgeslagen.");
+
+        const savedConsultant = {
+          username: result.username || username,
+          voornaam: requestBody.voornaam,
+          tussenvoegsel: requestBody.tussenvoegsel,
+          achternaam: requestBody.achternaam,
+          email: requestBody.email,
+          functie: requestBody.functie,
+          telefoonnummer: requestBody.telefoonnummer,
+          defaultlocatie: requestBody.defaultlocatie,
+          werkdagen: werkdagen.join(""),
+          start_werkdag: requestBody.start_werkdag,
+          einde_werkdag: requestBody.einde_werkdag,
+          address_street: requestBody.straat,
+          address_postcode: requestBody.postcode,
+          address_city: requestBody.woonplaats,
+        };
+        managedConsultantsByUsername.set(savedConsultant.username, savedConsultant);
+        const existingOption = [...managedConsultantSelect.options]
+          .find((option) => option.value === savedConsultant.username);
+        if (existingOption) {
+          existingOption.textContent = managedConsultantOptionText(savedConsultant);
+        } else {
+          managedConsultantSelect.add(new Option(
+            managedConsultantOptionText(savedConsultant),
+            savedConsultant.username,
+          ));
+        }
+        if (!isCreating) setManagedFormBaseline();
+        return {
+          created: isCreating,
+          authorisatiecode: result.authorisatiecode,
+        };
+      } catch (error) {
+        settingsError.textContent = error.message || "Consultantgegevens konden niet worden opgeslagen.";
+        settingsError.hidden = false;
+        return null;
+      } finally {
+        saveButton.disabled = false;
+        managedConsultantSelect.disabled = false;
+        addManagedConsultantButton.disabled = false;
+      }
+    }
+
+    document.querySelector("#setting-default-location").addEventListener("change", updateLocationDetails);
+
+    managedConsultantSelect.addEventListener("change", () => {
+      const consultant = managedConsultantsByUsername.get(managedConsultantSelect.value);
+      if (consultant) setManagedConsultant(consultant);
+    });
+
+    addManagedConsultantButton.addEventListener("click", () => {
+      if (managedFormHasChanges()) {
+        consultantSaveBeforeNewDialog.showModal();
+        return;
+      }
+      startNewManagedConsultant();
+    });
 
     async function loadPasswordResetRequests() {
       const list = document.querySelector("#password-reset-requests");
@@ -338,6 +636,18 @@
         const name = [consultant.voornaam, consultant.tussenvoegsel, consultant.achternaam].filter(Boolean).join(" ") || "Instellingen";
         const username = consultant.username ? ` (${consultant.username})` : "";
         document.querySelector("#consultant-name").textContent = `${name}${username}`;
+        const locationLabel = document.querySelector("#consultant-location");
+        locationLabel.textContent = fields.defaultlocatie ? `Locatie: ${fields.defaultlocatie}` : "";
+        locationLabel.hidden = !fields.defaultlocatie;
+        if (isBeheerder && isDedicatedConsultantPage) {
+          configureDedicatedConsultantPage();
+          setConsultantFormMode(true);
+          window.history.replaceState(null, "", window.location.pathname);
+          loadManagedConsultants();
+        } else if (isBeheerder && createConsultantRequested) {
+          setConsultantFormMode(true);
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden geladen.";
         settingsError.hidden = false;
@@ -392,27 +702,53 @@
       const werkdagen = [...document.querySelectorAll("[data-weekday]:checked")]
         .map((checkbox) => checkbox.dataset.weekday);
       try {
-        const response = await fetch("/api/consultant/settings", {
-          method: "PATCH",
+        const locationSelect = document.querySelector("#setting-default-location");
+        if (!locationSelect.value) throw new Error("Kies een werklocatie.");
+        const voornaam = document.querySelector("#setting-first-name").value.trim();
+        const tussenvoegsel = document.querySelector("#setting-prefix").value.trim();
+        const achternaam = document.querySelector("#setting-last-name").value.trim();
+        const name = [voornaam, tussenvoegsel, achternaam].filter(Boolean).join(" ");
+        const isCreating = creatingConsultant;
+        const requestBody = {
+          voornaam,
+          tussenvoegsel,
+          achternaam,
+          email: document.querySelector("#setting-email").value.trim(),
+          telefoonnummer: document.querySelector("#setting-phone").value.trim(),
+          straat: document.querySelector("#setting-home-street").value.trim(),
+          postcode: document.querySelector("#setting-home-postcode").value.trim(),
+          woonplaats: document.querySelector("#setting-home-city").value.trim(),
+          functie: document.querySelector("#setting-role").value.trim(),
+          start_werkdag: document.querySelector("#setting-start-werkdag").value,
+          einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
+          werkdagen,
+          defaultlocatie: Number(locationSelect.value),
+        };
+        if (isCreating) requestBody.username = document.querySelector("#setting-username").value.trim();
+        const response = await fetch(isCreating ? "/api/consultants" : "/api/consultant/settings", {
+          method: isCreating ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            voornaam: document.querySelector("#setting-first-name").value.trim(),
-            tussenvoegsel: document.querySelector("#setting-prefix").value.trim(),
-            achternaam: document.querySelector("#setting-last-name").value.trim(),
-            email: document.querySelector("#setting-email").value.trim(),
-            telefoonnummer: document.querySelector("#setting-phone").value.trim(),
-            straat: document.querySelector("#setting-home-street").value.trim(),
-            postcode: document.querySelector("#setting-home-postcode").value.trim(),
-            woonplaats: document.querySelector("#setting-home-city").value.trim(),
-            functie: document.querySelector("#setting-role").value.trim(),
-            start_werkdag: document.querySelector("#setting-start-werkdag").value,
-            einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
-            defaultlocatie: Number(document.querySelector("#setting-default-location").value),
-            werkdagen,
-          }),
+          body: JSON.stringify(requestBody),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Werkdagen konden niet worden opgeslagen.");
+        if (!response.ok) throw new Error(result.error || "Instellingen konden niet worden opgeslagen.");
+        if (isCreating) {
+          document.querySelector("#setting-authorisatiecode").value = result.authorisatiecode;
+          consultantCreated = true;
+          setConsultantFieldsReadOnly(true);
+          document.querySelector("#cancel-button").hidden = true;
+          button.hidden = true;
+          document.querySelector("#add-another-consultant-button").hidden = false;
+          document.querySelector("#done-adding-consultants-button").hidden = false;
+          status.textContent = "Consultant is aangemaakt. Bewaar de authorisatiecode.";
+          status.hidden = false;
+          return;
+        }
+        const username = document.querySelector("#consultant-name").textContent.match(/\(([^)]+)\)$/)?.[0] || "";
+        document.querySelector("#consultant-name").textContent = `${name || "Instellingen"} ${username}`.trim();
+        const locationLabel = document.querySelector("#consultant-location");
+        locationLabel.textContent = `Locatie: ${locationSelect.selectedOptions[0].textContent}`;
+        locationLabel.hidden = false;
         status.textContent = "Instellingen zijn opgeslagen.";
         status.hidden = false;
       } catch (error) {
@@ -433,7 +769,6 @@
       }
     });
 
-    document.querySelector("#setting-default-location").addEventListener("change", updateLocationDetails);
     loadConsultantSettings();
     loadPasswordResetRequests();
   </script>
