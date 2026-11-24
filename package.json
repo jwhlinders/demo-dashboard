@@ -5,8 +5,9 @@
   "scripts": {
     "start": "node --env-file=.env src/server.js",
     "pretest:e2e": "rimraf allure-results",
-    "test:e2e": "npx bddgen && npx kill-port 3100 && playwright test",
+    "test:e2e": "npx kill-port 3100 && playwright test --project=playwright",
     "test:bdd": "npx bddgen && npx kill-port 3100 && playwright test --project=bdd",
+    "test:smoke": "npx bddgen && playwright test --config=playwright.smoke.config.js --project=bdd --grep @smoke",
     "testdata:locaties": "node --env-file=.env src/testdata-locaties.js",
     "testdata:consultants": "node --env-file=.env src/testdata-consultants.js",
     "testdata:klanten": "node --env-file=.env src/testdata-klanten.js",
