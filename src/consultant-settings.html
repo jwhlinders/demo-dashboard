@@ -86,7 +86,27 @@
 
             <div class="field-row">
               <label class="field-label" for="setting-phone">Telefoonnummer</label>
-              <input id="setting-phone" name="telefoonnummer" type="text" readonly>
+              <input id="setting-phone" name="telefoonnummer" type="text">
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="consultant-address-title">
+          <h3 id="consultant-address-title">Adresgegevens</h3>
+          <div class="settings-stack">
+            <div class="field-row">
+              <label class="field-label" for="setting-home-street">Straat</label>
+              <input id="setting-home-street" name="straat" type="text" maxlength="100" autocomplete="street-address">
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-home-postcode">Postcode</label>
+              <input id="setting-home-postcode" name="postcode" type="text" maxlength="7" pattern="[0-9]{4}\s?[A-Za-z]{2}" title="Vul een postcode in, bijvoorbeeld 1234 AB." autocomplete="postal-code" autocapitalize="characters">
+            </div>
+
+            <div class="field-row">
+              <label class="field-label" for="setting-home-city">Woonplaats</label>
+              <input id="setting-home-city" name="woonplaats" type="text" maxlength="50" autocomplete="address-level2">
             </div>
           </div>
         </section>
@@ -181,6 +201,27 @@
   <script src="/confirmation-dialog.js"></script>
   <script>
     const settingsError = document.querySelector("#settings-error");
+    let locationsById = new Map();
+    let creatingConsultant = false;
+    let consultantCreated = false;
+    const isDedicatedConsultantPage = window.location.pathname === "/beheer-consultant";
+
+    function updateLocationDetails() {
+      const location = locationsById.get(document.querySelector("#setting-default-location").value);
+      for (const fieldId of ["setting-adres", "setting-postcode", "setting-plaats"]) {
+        const field = document.querySelector(`#${fieldId}`);
+        field.readOnly = true;
+        field.setAttribute("aria-readonly", "true");
+      }
+      const addressFields = {
+        "setting-adres": location?.adres || "",
+        "setting-postcode": location?.postcode || "",
+        "setting-plaats": location?.plaats || "",
+      };
+      for (const [fieldId, value] of Object.entries(addressFields)) {
+        document.querySelector(`#${fieldId}`).value = value;
+      }
+    }
 
     async function loadPasswordResetRequests() {
       const list = document.querySelector("#password-reset-requests");
@@ -351,14 +392,28 @@
       const werkdagen = [...document.querySelectorAll("[data-weekday]:checked")]
         .map((checkbox) => checkbox.dataset.weekday);
       try {
-        const response = await fetch("/api/consultant/settings/workdays", {
+        const response = await fetch("/api/consultant/settings", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ werkdagen }),
+          body: JSON.stringify({
+            voornaam: document.querySelector("#setting-first-name").value.trim(),
+            tussenvoegsel: document.querySelector("#setting-prefix").value.trim(),
+            achternaam: document.querySelector("#setting-last-name").value.trim(),
+            email: document.querySelector("#setting-email").value.trim(),
+            telefoonnummer: document.querySelector("#setting-phone").value.trim(),
+            straat: document.querySelector("#setting-home-street").value.trim(),
+            postcode: document.querySelector("#setting-home-postcode").value.trim(),
+            woonplaats: document.querySelector("#setting-home-city").value.trim(),
+            functie: document.querySelector("#setting-role").value.trim(),
+            start_werkdag: document.querySelector("#setting-start-werkdag").value,
+            einde_werkdag: document.querySelector("#setting-einde-werkdag").value,
+            defaultlocatie: Number(document.querySelector("#setting-default-location").value),
+            werkdagen,
+          }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Werkdagen konden niet worden opgeslagen.");
-        status.textContent = "Werkdagen zijn opgeslagen.";
+        status.textContent = "Instellingen zijn opgeslagen.";
         status.hidden = false;
       } catch (error) {
         settingsError.textContent = error.message || "Instellingen konden niet worden opgeslagen.";
@@ -378,6 +433,7 @@
       }
     });
 
+    document.querySelector("#setting-default-location").addEventListener("change", updateLocationDetails);
     loadConsultantSettings();
     loadPasswordResetRequests();
   </script>
