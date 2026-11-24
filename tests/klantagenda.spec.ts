@@ -144,9 +144,15 @@ test.describe('Afspraak aanvragen', () => {
     await expect(app.cardIn(date, reason)).toHaveCount(0);
   });
 
-  test('TC-03: aanvraag voor vandaag op een later tijdstip', async () => {
+  test('TC-03: aanvraag voor vandaag op een later tijdstip', async ({ page }) => {
     const now = new Date();
     test.skip(isWeekend(now), 'Vandaag is een weekenddag: geen afspraken mogelijk');
+    const workdays = await defaultConsultantWorkdays(page);
+    const weekday = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][now.getDay()];
+    test.skip(
+      !workdays.toLocaleLowerCase('nl-NL').includes(weekday.toLocaleLowerCase('nl-NL')),
+      'De standaardconsultant werkt vandaag niet.',
+    );
     const hour = now.getHours() + 1;
     test.skip(hour < CONFIG.firstStartHour || hour > CONFIG.lastStartHour, 'Huidige tijd valt buiten de werktijd');
 
