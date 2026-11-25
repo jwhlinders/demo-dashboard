@@ -4,10 +4,15 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
+# 1. Jouw bestaande E2E job (draait alleen bij Pull Requests of handmatig)
   e2e:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -82,4 +87,58 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+ # 2. Nieuwe job: Deploy naar Render & Smoke Test (draait alleen na merge naar main)
+  deploy-and-smoke:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      E2E_SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
+      E2E_SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+      E2E_SMOKE_CLIENT_USERNAME: ${{ secrets.SMOKE_CLIENT_USERNAME }}
+      E2E_SMOKE_CLIENT_PASSWORD: ${{ secrets.SMOKE_CLIENT_PASSWORD }}
+      PLAYWRIGHT_SMOKE_BASE_URL: http://demo-clientagenda.onrender.com
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render & Wait
+        uses: JorgeLNJunior/render-deploy@v1.5.0
+        with:
+          service_id: ${{ secrets.RENDER_SERVICE_ID }}
+          api_key: ${{ secrets.RENDER_API_KEY }}
+          wait_deploy: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Smoke Tests
+      # Vervang de namen links door de exacte namen uit jouw .env bestand
+
+        run: npm run test:smoke
+
+      - name: Set up Allure
+        if: always()
+        run: npm install -g allure-commandline
+
+      - name: Generate Allure Smoke Report
+        if: always()
+        run: npm run report:management
+
+      - name: Upload Allure Smoke Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-management-rapport
+          path: management-rapport/
+          if-no-files-found: warn
+          retention-days: 7
 
