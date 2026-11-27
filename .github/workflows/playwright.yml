@@ -8,7 +8,10 @@ on:
     branches:
       - main
   workflow_dispatch:
-
+  schedule:
+    # Draait elke dag om 02:00 UTC (03:00 Nederlandse tijd in de winter)
+    - cron: '0 2 * * *'
+    
 jobs:
 # 1. Jouw bestaande E2E job (draait alleen bij Pull Requests of handmatig)
   e2e:
