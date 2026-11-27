@@ -10,6 +10,22 @@ type TestDatabasePool = {
 
 const { Pool }: { Pool: new (options: { connectionString: string }) => TestDatabasePool } = require("pg");
 
+test("toont een inline foutmelding als de gebruikersnaam ontbreekt", async ({ page }) => {
+  let requestCount = 0;
+  await page.route("**/api/password-reset-requests", (route) => {
+    requestCount += 1;
+    return route.fulfill({ status: 201, contentType: "application/json", body: "{}" });
+  });
+  await page.goto("/password-reset-request");
+
+  await page.getByRole("button", { name: "Aanvraag versturen" }).click();
+
+  const error = page.locator("#request-error");
+  await expect(error).toHaveText("Vul je gebruikersnaam in.");
+  await expect(error).toBeVisible();
+  expect(requestCount).toBe(0);
+});
+
 test("Status aanvragen navigeert naar de statuspagina voor wachtwoordaanvragen", async ({ page }) => {
   await page.goto("/password-reset-request");
 

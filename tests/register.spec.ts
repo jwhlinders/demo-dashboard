@@ -1,5 +1,15 @@
 import { test, expect } from "@playwright/test";
 
+test("shows required-field validation below the submit button", async ({ page }) => {
+  await page.goto("/register");
+  await page.locator("#first-name").fill("Nieuwe");
+  await page.getByRole("button", { name: "Account aanmaken" }).click();
+
+  const error = page.locator("#register-error");
+  await expect(error).toHaveText("Vul de volgende velden in: Achternaam, E-mailadres.");
+  await expect(page.getByRole("button", { name: "Account aanmaken" }).locator("xpath=following-sibling::p[@id='register-error']")).toBeVisible();
+});
+
 test("shows the created account credentials and returns to login after confirmation", async ({ page }) => {
   const credentials = {
     username: "nieuwe.client",

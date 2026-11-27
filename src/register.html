@@ -17,7 +17,7 @@
       <p class="eyebrow">Nieuw account</p>
       <h1 id="register-title">Cliënt registreren</h1>
       <p class="login-copy">Vul je gegevens in. Je ontvangt automatisch een gebruikersnaam en tijdelijk wachtwoord.</p>
-      <form id="register-form">
+      <form id="register-form" novalidate>
         <div class="register-fields">
           <label class="field" for="first-name">
             <span>Voornaam</span>
@@ -36,8 +36,8 @@
             <input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
           </label>
         </div>
-        <p class="login-error" id="register-error" role="alert" hidden></p>
         <button class="primary-button" type="submit">Account aanmaken</button>
+        <p class="login-error" id="register-error" role="alert" hidden></p>
       </form>
       <p class="login-copy register-prompt">Heb je al een account? <a href="/login">Terug naar inloggen</a>.</p>
     </section>
@@ -115,6 +115,16 @@
       event.preventDefault();
       const form = event.currentTarget;
       const error = document.querySelector("#register-error");
+      if (!form.checkValidity()) {
+        const missingFields = Array.from(form.querySelectorAll("input[required]"))
+          .filter((field) => field.validity.valueMissing)
+          .map((field) => field.labels[0].textContent.trim());
+        error.textContent = missingFields.length
+          ? `Vul de volgende velden in: ${missingFields.join(", ")}.`
+          : "Vul een geldig e-mailadres in.";
+        error.hidden = false;
+        return;
+      }
       error.hidden = true;
       try {
         const response = await fetch("/api/register", {
