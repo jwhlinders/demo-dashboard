@@ -246,7 +246,12 @@ When("ik maandag uitschakel en de instellingen opsla", async ({ page }) => {
 
   try {
     await monday.uncheck();
+    const saveResponsePromise = page.waitForResponse((response) =>
+      response.url() === urlFor(page, "/api/consultant/settings")
+      && response.request().method() === "PATCH");
     await page.locator("#save-button").click();
+    const saveResponse = await saveResponsePromise;
+    expect(saveResponse.ok()).toBeTruthy();
     await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
     const response = await page.request.get(urlFor(page, "/api/consultant/settings"));
     const updatedConsultant = await response.json() as Pick<ConsultantSettings, "werkdagen">;
@@ -254,7 +259,14 @@ When("ik maandag uitschakel en de instellingen opsla", async ({ page }) => {
     await expect(monday).not.toBeChecked();
   } finally {
     if (scenario.mondayWasEnabled) await monday.check();
+    const restoreResponsePromise = page.waitForResponse((response) =>
+      response.url() === urlFor(page, "/api/consultant/settings")
+      && response.request().method() === "PATCH");
     await page.locator("#save-button").click();
+    const restoreResponse = await restoreResponsePromise;
+    expect(restoreResponse.ok()).toBeTruthy();
+    const restoredConsultant = await restoreResponse.json() as Pick<ConsultantSettings, "werkdagen">;
+    expect(restoredConsultant.werkdagen.includes("Ma")).toBe(scenario.mondayWasEnabled);
     await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
   }
 });

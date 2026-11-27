@@ -30,7 +30,7 @@
       <p class="eyebrow">Beveiligde omgeving</p>
       <h1 id="login-title">Welkom terug</h1>
       <p class="login-copy">Log in om je agenda te bekijken.</p>
-      <form id="login-form">
+      <form id="login-form" novalidate>
         <label class="field" for="username">
           <span>Gebruikersnaam</span>
           <input id="username" name="username" type="text" autocomplete="username" required autofocus>
@@ -39,8 +39,8 @@
           <span>Wachtwoord</span>
           <input id="password" name="password" type="password" autocomplete="current-password" required>
         </label>
-        <p class="login-error" id="login-error" role="alert" hidden></p>
         <button class="primary-button" type="submit">Inloggen</button>
+        <p class="login-error" id="login-error" role="alert" hidden></p>
       </form>
     </section>
   </main>
@@ -69,6 +69,12 @@
       event.preventDefault();
       const form = event.currentTarget;
       const error = document.querySelector("#login-error");
+      if (!form.checkValidity()) {
+        error.textContent = "Vul je gebruikersnaam en wachtwoord in.";
+        error.hidden = false;
+        return;
+      }
+      error.hidden = true;
       try {
         const response = await fetch("/api/login", {
           method: "POST",

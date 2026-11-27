@@ -161,11 +161,15 @@ body {
 }
 
 .login-panel #login-form > .login-error,
-.login-panel #reset-request-form > .login-error,
 .login-panel #reset-request-form > .register-success,
 .login-panel #reset-status-form > .login-error,
 .login-panel #reset-status-form > .register-success {
   grid-column: 1 / -1;
+}
+
+.login-panel #reset-request-form > .login-error {
+  grid-column: 2;
+  width: 100%;
 }
 
 .login-panel #consultant-register-form > .login-error,

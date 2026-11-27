@@ -47,5 +47,7 @@ export class LoginPage {
     await expect.poll(async () => {
       return await field.evaluate((element: HTMLInputElement) => element.validity.valid);
     }).toBe(false);
+    await expect(this.error).toBeVisible();
+    await expect(this.signIn.locator("xpath=following-sibling::p[@id='login-error']")).toBeVisible();
   }
 }
