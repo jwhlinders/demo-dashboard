@@ -119,7 +119,12 @@ test("TC-02: consultant kan instellingen bekijken en werkdagen wijzigen", async 
   const monday = page.locator('[data-weekday="Ma"]');
   try {
     await monday.uncheck();
+    const saveResponsePromise = page.waitForResponse((response) =>
+      response.url() === new URL("/api/consultant/settings", page.url()).toString()
+      && response.request().method() === "PATCH");
     await page.locator("#save-button").click();
+    const saveResponse = await saveResponsePromise;
+    expect(saveResponse.ok()).toBeTruthy();
     await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
     const updatedResponse = await page.request.get(new URL("/api/consultant/settings", page.url()).toString());
     const updatedConsultant = await updatedResponse.json();
@@ -127,7 +132,14 @@ test("TC-02: consultant kan instellingen bekijken en werkdagen wijzigen", async 
     await expect(monday).not.toBeChecked();
   } finally {
     if (mondayWasEnabled) await monday.check();
+    const restoreResponsePromise = page.waitForResponse((response) =>
+      response.url() === new URL("/api/consultant/settings", page.url()).toString()
+      && response.request().method() === "PATCH");
     await page.locator("#save-button").click();
+    const restoreResponse = await restoreResponsePromise;
+    expect(restoreResponse.ok()).toBeTruthy();
+    const restoredConsultant = await restoreResponse.json() as { werkdagen: string };
+    expect(restoredConsultant.werkdagen.includes("Ma")).toBe(mondayWasEnabled);
     await expect(page.locator("#settings-status")).toHaveText("Instellingen zijn opgeslagen.");
   }
 });
